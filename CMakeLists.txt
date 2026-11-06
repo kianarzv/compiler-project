@@ -11,6 +11,9 @@ add_library(bminor_core
     src/token.cpp
     src/lexer.cpp
     src/diagnostic.cpp
+    src/ast.cpp
+    src/parser.cpp
+    src/text_output.cpp
 )
 target_include_directories(bminor_core PUBLIC include)
 
@@ -25,15 +28,26 @@ if(BUILD_TESTING)
     add_executable(diagnostic_tests tests/diagnostic_tests.cpp)
     target_link_libraries(diagnostic_tests PRIVATE bminor_core)
     add_test(NAME diagnostic_tests COMMAND diagnostic_tests)
+    add_executable(parser_tests tests/parser_tests.cpp)
+    target_link_libraries(parser_tests PRIVATE bminor_core)
+    add_test(NAME parser_tests COMMAND parser_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
             -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_lexical_cli.cmake
     )
+    add_test(NAME declaration_ast_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.bminor
+            -DLEXICAL_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
+            -DSYNTAX_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/declaration_error.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_ast_cli.cmake
+    )
 endif()
 
-foreach(target bminor_core bminor lexer_tests diagnostic_tests)
+foreach(target bminor_core bminor lexer_tests diagnostic_tests parser_tests)
     if(NOT TARGET ${target})
         continue()
     endif()

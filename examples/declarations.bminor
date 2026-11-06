@@ -1,0 +1,12 @@
+// Step 5: declarations and prototypes, without function bodies yet.
+count: integer = 42;
+enabled: boolean = true;
+separator: char = ',';
+message: string = "Hello\n";
+pending: integer;
+values: array [3] integer = {1, 2, 3};
+grid: array [2] array [2] integer = {{1, 2}, {3, 4}};
+
+sum: function integer (left: integer, right: integer);
+show: function void (items: array [] integer, size: integer);
+ready: function boolean ();

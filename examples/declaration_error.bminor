@@ -1,0 +1,3 @@
+ready: boolean = true;
+broken integer;
+unreached: integer = 3;

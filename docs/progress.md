@@ -131,4 +131,47 @@ Validation passed:
 - `run.ps1` forwarded all six diagnostics and exit code 1 for that CRLF copy;
   original source-display mode still returned success without lexical validation.
 
-Next review gate: user approval before step 5 (B-Minor grammar and declarations).
+Step 5 was approved by the user after reviewing lexical diagnostics.
+
+## Step 5: grammar, declaration parser and initial AST
+
+Implemented:
+
+- A documented target EBNF and a separately documented implemented subset.
+- Recursive-descent strategy analysis: factored declaration prefixes, disjoint
+  FIRST sets, list boundaries, absence of left recursion, and planned handling
+  of identifier/colon lookahead and dangling else in later statement parsing.
+- Explicit operator precedence/associativity choices for the upcoming expression parser.
+- Variable declarations, atomic/nested array types, literals and braced initializers.
+- Function prototypes with atomic/void return types and typed parameters,
+  including unsized array parameters.
+- Owned AST nodes with source positions and nullable semantic-type annotations.
+- A separate AST printer and shared source-spelling display escaping.
+- `--ast` / `run.ps1 -Ast`, a declaration sample and a partial-tree error sample.
+- Parser diagnostic codes for unexpected tokens, unfinished later-step features
+  and bounded nesting, with a controlled stop at the first syntax error.
+- Twelve parser regression groups and a CLI test covering valid/partial ASTs
+  and lexical-error gating. Existing lexer/diagnostic checks remain enabled.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and the configured warnings, without compiler warnings.
+- All five CTest targets passed: the existing lexer/diagnostic groups and lexical
+  CLI test, 12 new parser groups, and the declaration AST CLI test.
+- The maintained declaration sample produced seven variable declarations, three
+  function prototypes and four parameters with null semantic annotations.
+- Compared the full AST and source coordinates against a CRLF copy in a path
+  containing spaces; they matched after normalizing only the filename.
+- Checked partial AST output at the first syntax error, EOF diagnostics,
+  unimplemented body/expression diagnostics, bounded recursion and AST ownership.
+- Confirmed lexical errors suppress parser startup and do not duplicate messages.
+- Checked conflicting display flags, old source display, shared token escaping
+  and exact source reconstruction from existing token-mode samples.
+- `run.ps1 -Ast` forwarded valid AST output and syntax-error exit status for
+  both normal and path-with-spaces inputs.
+
+This is an initial declaration parser. General expressions and array bounds
+arrive in step 6, function bodies/statements in step 7, and panic-mode recovery
+in step 8. Semantic checks are reserved for later project phases.
+
+Next review gate: user approval before step 6 (expression parsing).

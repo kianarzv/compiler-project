@@ -1,5 +1,7 @@
 #include "bminor/lexer.hpp"
+#include "bminor/parser.hpp"
 #include "bminor/source_file.hpp"
+#include "bminor/text_output.hpp"
 
 #include <exception>
 #include <iostream>
@@ -11,19 +13,22 @@ namespace {
 struct Options {
     std::string path;
     bool show_tokens = false;
+    bool show_ast = false;
     bool show_whitespace = false;
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 4\n"
-        << "Usage: bminor [--tokens [--show-whitespace]] [--] <source-file>\n"
+    out << "B-Minor Front End - Step 5\n"
+        << "Usage: bminor [--tokens | --ast] [--show-whitespace] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
         << "--tokens: show token kinds, lexemes and source locations.\n"
+        << "--ast: parse declarations and show their syntax tree.\n"
         << "--show-whitespace: include whitespace rows in the token display.\n\n"
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
-        << "In token mode, errors are reported on stderr after scanning; exit code 1.\n";
+        << "In token/AST mode, errors are reported on stderr; exit code 1.\n"
+        << "AST mode currently accepts types, literal initializers and prototypes.\n";
 }
 
 Options parse_options(int argc, char* argv[]) {
@@ -37,6 +42,8 @@ Options parse_options(int argc, char* argv[]) {
             read_options = false;
         } else if (read_options && argument == "--tokens") {
             options.show_tokens = true;
+        } else if (read_options && argument == "--ast") {
+            options.show_ast = true;
         } else if (read_options && argument == "--show-whitespace") {
             options.show_whitespace = true;
         } else if (read_options && !argument.empty() && argument[0] == '-') {
@@ -55,30 +62,10 @@ Options parse_options(int argc, char* argv[]) {
     if (options.show_whitespace && !options.show_tokens) {
         throw std::invalid_argument("--show-whitespace requires --tokens.");
     }
-    return options;
-}
-
-void write_escaped(std::ostream& out, const std::string& text) {
-    // Each lexeme occupies one table row. Escape tabs, newlines, quotes and
-    // non-printable bytes for display only; the token's stored text is intact.
-    const char hex[] = "0123456789ABCDEF";
-    out << '"';
-    for (unsigned char c : text) {
-        switch (c) {
-        case '\n': out << "\\n"; break;
-        case '\r': out << "\\r"; break;
-        case '\t': out << "\\t"; break;
-        case '\\': out << "\\\\"; break;
-        case '"':  out << "\\\""; break;
-        default:
-            if (c < 32 || c >= 127) {
-                out << "\\x" << hex[c >> 4] << hex[c & 15];
-            } else {
-                out << static_cast<char>(c);
-            }
-        }
+    if (options.show_tokens && options.show_ast) {
+        throw std::invalid_argument("Choose either --tokens or --ast.");
     }
-    out << '"';
+    return options;
 }
 
 bool print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
@@ -94,7 +81,7 @@ bool print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
         std::cout << token.location.filename << ':' << token.location.line
                   << ':' << token.location.column << '\t'
                   << bminor::token_kind_name(token.kind) << '\t';
-        write_escaped(std::cout, token.lexeme);
+        bminor::write_escaped(std::cout, token.lexeme);
         std::cout << '\n';
     }
     // Keep the recovered token table on stdout and messages on stderr. Errors
@@ -104,6 +91,28 @@ bool print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
         bminor::write_diagnostic(std::cerr, diagnostic);
     }
     return !result.has_errors();
+}
+
+bool print_ast(const bminor::SourceFile& source) {
+    bminor::Lexer lexer(source);
+    const auto lexed = lexer.tokenize();
+    if (lexed.has_errors()) {
+        // Lexical recovery still collects every error. Avoid turning INVALID
+        // tokens into a second set of misleading parser errors in this mode.
+        for (const auto& error : lexed.diagnostics) {
+            bminor::write_diagnostic(std::cerr, error);
+        }
+        return false;
+    }
+
+    bminor::Parser parser(lexed.tokens);
+    const auto parsed = parser.parse();
+    bminor::dump_ast(std::cout, *parsed.program);
+    std::cout.flush();
+    for (const auto& error : parsed.diagnostics) {
+        bminor::write_diagnostic(std::cerr, error);
+    }
+    return !parsed.has_errors();
 }
 
 } // namespace
@@ -119,6 +128,8 @@ int main(int argc, char* argv[]) {
         const bminor::SourceFile source = bminor::SourceFile::load(options.path);
         if (options.show_tokens) {
             return print_tokens(source, options.show_whitespace) ? 0 : 1;
+        } else if (options.show_ast) {
+            return print_ast(source) ? 0 : 1;
         } else {
             std::cout << "Loaded: " << source.path << '\n'
                       << "Bytes: " << source.text.size() << '\n'

@@ -1,0 +1,53 @@
+(* Target grammar for the selected base B-Minor dialect.
+   Step 5 implements the declaration subset described in parser-design.md.
+   Quotes denote source terminals; names in capitals denote lexer token kinds.
+   [x] is optional, {x} repeats zero or more times, and | separates choices. *)
+
+program = { global_declaration }, EOF ;
+global_declaration = IDENTIFIER, ":", (function_tail | variable_tail) ;
+variable_tail = value_type, [ "=", initializer ], ";" ;
+function_tail = "function", return_type, "(", [ parameter_list ], ")",
+                ( ";" | "=", block ) ;
+parameter_list = parameter, { ",", parameter } ;
+parameter = IDENTIFIER, ":", parameter_type ;
+
+atomic_type = "integer" | "boolean" | "char" | "string" ;
+return_type = atomic_type | "void" ;
+value_type = atomic_type | "array", "[", expression, "]", value_type ;
+parameter_type = atomic_type
+               | "array", "[", [ expression ], "]", parameter_type ;
+
+initializer = expression | array_initializer ;
+array_initializer = "{", [ initializer, { ",", initializer } ], "}" ;
+
+block = "{", { statement }, "}" ;
+statement = block | local_declaration | if_statement | for_statement
+           | return_statement | print_statement | expression_statement ;
+local_declaration = IDENTIFIER, ":", variable_tail ;
+if_statement = "if", "(", expression, ")", statement,
+               [ "else", statement ] ;
+for_statement = "for", "(", [ expression ], ";", [ expression ], ";",
+                [ expression ], ")", statement ;
+return_statement = "return", [ expression ], ";" ;
+print_statement = "print", argument_list, ";" ;
+expression_statement = [ expression ], ";" ;
+
+expression = assignment ;
+assignment = logical_or, [ "=", assignment ] ;
+logical_or = logical_and, { "||", logical_and } ;
+logical_and = equality, { "&&", equality } ;
+equality = relational, { ( "==" | "!=" ), relational } ;
+relational = additive, { ( "<" | "<=" | ">" | ">=" ), additive } ;
+additive = multiplicative, { ( "+" | "-" ), multiplicative } ;
+multiplicative = power, { ( "*" | "/" | "%" ), power } ;
+power = unary, [ "^", power ] ;
+unary = ( "-" | "!" ), unary | postfix ;
+postfix = primary, { "[", expression, "]"
+                   | "(", [ argument_list ], ")" | "++" | "--" } ;
+primary = IDENTIFIER | literal | "(", expression, ")" ;
+argument_list = expression, { ",", expression } ;
+literal = INTEGER_LITERAL | BOOLEAN_LITERAL | CHARACTER_LITERAL | STRING_LITERAL ;
+
+(* Disambiguation policy: else attaches to the nearest unmatched if.
+   Operator grouping and other explicit dialect decisions are documented in
+   parser-design.md. Assignment targets and operand types are semantic checks. *)

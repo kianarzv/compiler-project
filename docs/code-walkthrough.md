@@ -3,7 +3,8 @@
 ## Follow a run
 
 1. `src/main.cpp` checks arguments. With no display option it shows the original
-   source, as in step 1. With `--tokens` it calls `print_tokens()` instead.
+   source, as in step 1. `--tokens` calls `print_tokens()`; `--ast` calls
+   `print_ast()`. The two display modes cannot be combined.
 2. `SourceFile::load()` opens the file in binary mode and stores its bytes. File
    errors become exceptions and are reported by `main()` with exit code 1.
 3. `Lexer::tokenize()` resets its cursor and diagnostics, then repeatedly calls
@@ -60,8 +61,9 @@ end before the physical newline, while block comments include their closing
 - **Diagnostic cause:** add a `DiagnosticCode` and its label in
   `src/diagnostic.cpp`, then call `report()` with a source location and span.
   The lexer reports data; `write_diagnostic()` controls the CLI message format.
-- **CLI display:** change `print_tokens()` or `write_escaped()` in `src/main.cpp`.
-  Keep display escaping separate from the token's original lexeme.
+- **CLI display:** change `print_tokens()` or `print_ast()` in `src/main.cpp`.
+  Shared `write_escaped()` lives in `src/text_output.cpp`. Keep display escaping
+  separate from stored lexeme text.
 - **Regression checks:** add a case in `tests/lexer_tests.cpp` and run CTest.
   Tests use exceptions rather than disabled-in-Release assertions.
   Error behavior belongs in `tests/diagnostic_tests.cpp`; CLI stream/exit-code
@@ -78,3 +80,38 @@ the source/lexer are destroyed or another scan starts.
 The CLI does not decide lexical categories. The lexer does not print or format
 output. Keeping these responsibilities apart lets future parser and highlighter
 code use the same tokens without depending on command-line behavior.
+
+## Follow an AST run
+
+`print_ast()` first uses the same lexer. If that reports lexical errors, they
+are shown without starting syntax parsing. Otherwise the EOF-terminated token
+vector is passed to `Parser`. Its cursor skips whitespace/comments, retaining
+the original token objects and source locations for node creation.
+
+`parse_declaration()` consumes a name and colon before deciding between a
+function prototype and a variable. Variable types are read by
+`parse_value_type()`, which recurses for nested arrays. Function return types
+use `parse_atomic_type(true)` to admit `void`; parameter types additionally
+permit unsized arrays. Each parameter has its own name and type child nodes.
+
+`parse_initializer()` currently handles literals and nested braced lists. It
+creates `LiteralExpr` leaves or an `ArrayInitExpr` owning the elements. Normal
+expression routines will replace the literal-only branch in step 6.
+
+An error creates a structured parser diagnostic and throws a private
+`ParseFailure` signal. `parse()` catches it, automatically destroys the
+incomplete declaration, and returns any complete earlier declarations. A
+`PAR002` message explicitly marks syntax scheduled for a later step rather
+than accepting an unparsed expression/body. Panic-mode recovery comes in step 8.
+
+`ParseResult` owns the `Program` and diagnostics. Nodes own their children with
+`unique_ptr`; no AST data depends on the input vector's lifetime. All node
+locations come from their first significant token. Every node's
+`semantic_type` starts null, separately from the `TypeSyntax` tree that records
+what was written in the file. `dump_ast()` traverses these nodes for display.
+
+To extend parsing, update the appropriate routine in `src/parser.cpp`, the node
+definitions in `include/bminor/ast.hpp`, and the printer in `src/ast.cpp`.
+Document grammar choices in `docs/parser-design.md` and test tree shape as well
+as successful parsing. The target and current subset are documented separately
+so a grammar rule in a future step does not imply it is already implemented.

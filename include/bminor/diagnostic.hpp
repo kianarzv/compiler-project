@@ -20,7 +20,10 @@ enum class DiagnosticCode {
     InvalidLiteralByte,
     IncompleteEscape,
     IdentifierTooLong,
-    StringTooLong
+    StringTooLong,
+    UnexpectedToken,
+    UnsupportedSyntax,
+    ParserNestingLimit
 };
 
 struct Diagnostic {
@@ -28,6 +31,7 @@ struct Diagnostic {
     SourceLocation location;
     // Number of source bytes covered by the error. A bad byte or dangling
     // backslash has length 1; a missing delimiter covers the unfinished token.
+    // Parser diagnostics at EOF have length 0 because no source byte follows it.
     std::size_t length;
     std::string message;
 };

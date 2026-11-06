@@ -1,6 +1,7 @@
 param(
     [string]$Source = "examples/hello.bminor",
     [switch]$Tokens,
+    [switch]$Ast,
     [switch]$ShowWhitespace
 )
 
@@ -20,6 +21,7 @@ try {
     # Forward each argument separately so paths containing spaces stay intact.
     $programArgs = @()
     if ($Tokens) { $programArgs += "--tokens" }
+    if ($Ast) { $programArgs += "--ast" }
     if ($ShowWhitespace) { $programArgs += "--show-whitespace" }
     $programArgs += "--"
     $programArgs += $Source

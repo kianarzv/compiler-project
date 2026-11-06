@@ -15,6 +15,9 @@ const char* diagnostic_code_name(DiagnosticCode code) {
     case DiagnosticCode::IncompleteEscape:         return "LEX007";
     case DiagnosticCode::IdentifierTooLong:        return "LEX008";
     case DiagnosticCode::StringTooLong:            return "LEX009";
+    case DiagnosticCode::UnexpectedToken:          return "PAR001";
+    case DiagnosticCode::UnsupportedSyntax:        return "PAR002";
+    case DiagnosticCode::ParserNestingLimit:       return "PAR003";
     }
     return "UNKNOWN";
 }

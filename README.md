@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 4
+## Current state: step 5
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -15,8 +15,13 @@ Use `examples/lexer_full.bminor` for the new complete-program sample, or
 Malformed literals, unfinished block comments, overlong words/strings and
 unknown bytes produce `INVALID` rows and structured diagnostics. Scanning
 continues to EOF. Token mode prints diagnostics on stderr and returns exit
-code 1 when any lexical error is present. This build loads and tokenizes
-B-Minor source; later steps add parsing and highlighting.
+code 1 when any lexical error is present.
+
+The new `--ast` mode parses variable declarations, nested array types, literal
+and braced initializers, and function prototypes. It prints the AST with source
+locations and null semantic-type annotations. Expressions beyond literals and
+function bodies remain scheduled for steps 6 and 7. Syntax parsing currently
+stops after its first error, retaining previously completed declarations.
 
 ## Build and run on Windows
 
@@ -43,6 +48,34 @@ To inspect a valid complete-program sample:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/lexer_full.bminor -Tokens
 ```
+
+To inspect the step-5 declaration tree:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/declarations.bminor -Ast
+```
+
+The start of its output is:
+
+```text
+Program @examples/declarations.bminor:2:1 type=null
+  VarDecl @examples/declarations.bminor:2:1 type=null
+    Identifier "count" @examples/declarations.bminor:2:1 type=null
+    Type integer @examples/declarations.bminor:2:8 type=null
+    Literal INTEGER_LITERAL "42" @examples/declarations.bminor:2:18 type=null
+```
+
+`Type integer` records source syntax; `type=null` is the separate semantic
+annotation reserved for a later project phase. The sample also contains nested
+array initializers and functions with ordinary/unsized-array parameters.
+`-Ast` and `-Tokens` are alternative display modes; whitespace display applies
+only to token mode.
+
+For a partial AST and a syntax diagnostic, use
+`-Source examples/declaration_error.bminor -Ast`. It retains `ready`, reports
+`PAR001` for the missing colon, and stops before `unreached`. The full B-Minor
+programs in `hello.bminor` and `lexer_full.bminor` can still be tokenized, but
+their function bodies produce `PAR002` in AST mode until step 7.
 
 Add `-ShowWhitespace` to include escaped spaces and line endings in the table.
 Comments are shown even when whitespace is hidden. To compare with step 2,
@@ -86,6 +119,7 @@ cmake --build build
 .\build\bminor.exe --tokens examples/tokens_basic.bminor
 .\build\bminor.exe --tokens --show-whitespace examples/tokens_basic.bminor
 .\build\bminor.exe --tokens examples/lexer_full.bminor
+.\build\bminor.exe --ast examples/declarations.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -102,8 +136,9 @@ main: function integer () = {
 }
 ```
 
-Exit codes: `0` for success or help, `1` for file errors or lexical errors in
-token mode, and `2` for incorrect command-line usage. Byte counts depend on the
+Exit codes: `0` for success or help, `1` for file/lexical/parser errors, and `2`
+for incorrect command-line usage. Lexical errors affect token and AST modes;
+parser errors affect AST mode. Byte counts depend on the
 file's line endings. Default source-display mode only reads and shows the file;
 it does not perform lexical validation.
 
@@ -117,16 +152,25 @@ it does not perform lexical validation.
 - `include/bminor/lexer.hpp` and `src/lexer.cpp`: scanning and word classification.
 - `include/bminor/diagnostic.hpp` and `src/diagnostic.cpp`: diagnostic data,
   stable error codes and message rendering.
+- `include/bminor/ast.hpp` and `src/ast.cpp`: owned syntax nodes and tree output.
+- `include/bminor/parser.hpp` and `src/parser.cpp`: declaration/type parsing.
+- `include/bminor/text_output.hpp` and `src/text_output.cpp`: shared escaped text display.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
   comments, malformed input, positions and complete source coverage.
 - `tests/diagnostic_tests.cpp`: 10 regression groups for error causes, spans,
   length boundaries, recovery and owned scan results.
 - `tests/check_lexical_cli.cmake`: real CLI output streams and error exit status.
+- `tests/parser_tests.cpp`: 12 groups for declaration structure, positions,
+  syntax errors, unfinished features, nesting limits and AST ownership.
+- `tests/check_ast_cli.cmake`: valid/partial AST output and lexical-error gating.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
 - `docs/lexical-rules.md`: selected dialect, formal rules and current limits.
 - `docs/code-walkthrough.md`: execution flow and where to make future changes.
+- `docs/grammar.ebnf`: the target B-Minor grammar for steps 5 through 7.
+- `docs/parser-design.md`: implemented subset, FIRST/FOLLOW decisions, precedence,
+  AST ownership and current parser limitations.
 
 Source text is retained without newline conversion, since later output must
 preserve its formatting. Generated files stay in `build/` or `output/`.

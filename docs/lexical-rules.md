@@ -156,3 +156,5 @@ characters for readable table rows without changing tokens.
 In `--tokens` mode the recovered table is written to stdout, diagnostics are
 written to stderr, and any lexical error causes exit code 1 after scanning.
 A clean scan returns 0. The original source-display mode performs no lexing.
+`--ast` also scans the full file first. If lexical errors exist, it reports
+them and returns 1 without starting the parser or adding duplicate syntax errors.

@@ -1,4 +1,5 @@
 #include "bminor/ansi_renderer.hpp"
+#include "bminor/render_support.hpp"
 
 #include <ostream>
 #include <stdexcept>
@@ -30,28 +31,11 @@ const char* style_for(const ClassifiedSpan& span) {
     }
 }
 
-void validate_spans(const SourceFile& source, const std::vector<ClassifiedSpan>& spans) {
-    std::size_t next_offset = 0;
-    for (const auto& span : spans) {
-        // Check with subtraction rather than offset + length, which could
-        // overflow for a malformed span. Validate the whole input first so
-        // mistakes cannot leave a partly styled document on the output stream.
-        if (span.location.filename != source.path || span.location.offset != next_offset
-            || span.length == 0 || span.length > source.text.size() - next_offset) {
-            throw std::invalid_argument("ANSI spans must partition the matching source file.");
-        }
-        next_offset += span.length;
-    }
-    if (next_offset != source.text.size()) {
-        throw std::invalid_argument("ANSI spans must cover the complete source file.");
-    }
-}
-
 } // namespace
 
 void render_ansi(std::ostream& out, const SourceFile& source,
                  const std::vector<ClassifiedSpan>& spans) {
-    validate_spans(source, spans);
+    validate_render_spans(source, spans);
     for (const auto& span : spans) {
         const char* const style = style_for(span);
         if (*style != '\0') { out << style; }

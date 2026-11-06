@@ -4,6 +4,8 @@ param(
     [switch]$Ast,
     [switch]$Classify,
     [switch]$Ansi,
+    [switch]$Html,
+    [string]$Output = "",
     [switch]$ShowWhitespace
 )
 
@@ -26,6 +28,17 @@ try {
     if ($Ast) { $programArgs += "--ast" }
     if ($Classify) { $programArgs += "--classify" }
     if ($Ansi) { $programArgs += "--ansi" }
+    if ($Html) {
+        $programArgs += "--html"
+        if (-not $Output) { $Output = "output/highlight.html" }
+        # The native CLI writes binary HTML directly, avoiding PowerShell's
+        # text-pipeline encoding. Create its parent for a ready-to-open result.
+        $outputDirectory = Split-Path -Path $Output -Parent
+        if ($outputDirectory) {
+            New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
+        }
+    }
+    if ($Output) { $programArgs += "--output"; $programArgs += $Output }
     if ($ShowWhitespace) { $programArgs += "--show-whitespace" }
     $programArgs += "--"
     $programArgs += $Source

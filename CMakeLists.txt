@@ -16,6 +16,8 @@ add_library(bminor_core
     src/text_output.cpp
     src/syntax_classifier.cpp
     src/ansi_renderer.cpp
+    src/render_support.cpp
+    src/html_renderer.cpp
 )
 target_include_directories(bminor_core PUBLIC include)
 
@@ -48,6 +50,9 @@ if(BUILD_TESTING)
     add_executable(ansi_tests tests/ansi_tests.cpp)
     target_link_libraries(ansi_tests PRIVATE bminor_core)
     add_test(NAME ansi_tests COMMAND ansi_tests)
+    add_executable(html_tests tests/html_tests.cpp)
+    target_link_libraries(html_tests PRIVATE bminor_core)
+    add_test(NAME html_tests COMMAND html_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
@@ -100,11 +105,20 @@ if(BUILD_TESTING)
             -DLEXICAL_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_ansi_cli.cmake
     )
+    add_test(NAME html_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/classification.bminor
+            -DPREVIEW_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/html_preview.bminor
+            -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/syntax_errors.bminor
+            -DLEXICAL_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_html_cli.cmake
+    )
 endif()
 
 foreach(target IN ITEMS
     bminor_core bminor lexer_tests diagnostic_tests parser_tests
-    expression_tests statement_tests recovery_tests classifier_tests ansi_tests
+    expression_tests statement_tests recovery_tests classifier_tests ansi_tests html_tests
 )
     if(NOT TARGET ${target})
         continue()

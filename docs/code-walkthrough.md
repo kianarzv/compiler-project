@@ -5,7 +5,8 @@
 1. `src/main.cpp` checks arguments. With no display option it shows the original
    source, as in step 1. `--tokens` calls `print_tokens()`; `--ast` calls
    `print_ast()`. `--classify` calls `print_classification()` and `--ansi` calls
-   `print_ansi()`. Analysis modes
+   `print_ansi()`. `--html` calls `print_html()`; optional `--output` chooses a
+   saved document instead of HTML on stdout. Analysis modes
    cannot be combined; the `OutputMode` enum stores the single selected mode.
 2. `SourceFile::load()` opens the file in binary mode and stores its bytes. File
    errors become exceptions and are reported by `main()` with exit code 1.
@@ -189,8 +190,8 @@ discarded regions represented by error nodes while preserving each base role;
 whitespace and zero-byte missing nodes are not decorated.
 
 The classification table reads each span's text from the original source and
-escapes it using the existing display helper. The ANSI renderer uses the same
-spans and raw bytes with terminal styles. Read `docs/syntax-classification.md` before changing role
+escapes it using the existing display helper. Both renderers use the same
+spans with their own output encoding/styles. Read `docs/syntax-classification.md` before changing role
 or error precedence; `tests/classifier_tests.cpp` checks expected context and
 that source/AST data remain unchanged.
 
@@ -201,7 +202,7 @@ passes the result to `render_ansi()` and leaves diagnostics on stderr. Even a
 failed analysis returns complete spans, so the whole file remains visible.
 The boolean return value determines exit status after rendering and diagnostics.
 
-`render_ansi()` first checks source identity, contiguous offsets, nonempty
+`render_ansi()` first uses `validate_render_spans()` to check source identity, contiguous offsets, nonempty
 lengths and complete coverage. This catches a renderer/classifier integration
 mistake before any partial document is written. For each span, `style_for()`
 chooses a sequence based on role/error status. The renderer writes that sequence,
@@ -220,3 +221,39 @@ English comments explain error precedence, reset boundaries and byte copying;
 `docs/ansi-rendering.md` lists the full palette and stream contract. The unit
 suite checks formatting/styles and the CLI suite captures actual binary output
 to catch newline translation that string-stream tests would miss.
+
+## Follow an HTML export
+
+`print_html()` runs the same classifier as the ANSI path. With `--output`, it
+renders a full document into a string stream before opening the destination.
+`check_html_destination()` compares existing output against the loaded source
+to avoid replacing that source through a path alias or link. Binary writing and
+the close check happen next; only then does stdout report the saved file.
+Without `--output`, the renderer writes directly to binary stdout and the CLI
+checks its final flush. Both paths keep analysis diagnostics on stderr.
+
+`render_html()` calls the shared `validate_render_spans()` before writing the
+document shell and embedded stylesheet. It escapes the source path in both the
+title and visible heading. Each visible span gets a fixed class from
+`css_class()` and optionally an additional `error` class. Whitespace has no
+wrapper; all slices pass through `write_html_text()` for escaping and CR handling.
+This division keeps AST interpretation out of markup generation.
+
+`write_html_text()` escapes markup characters and encodes CR as `&#13;` to retain
+it in browser DOM text. It copies valid UTF-8 sequences within a span and makes
+unsupported controls/malformed bytes visible as `\xHH`. `utf8_length()` validates
+continuation bytes, shortest encodings and the Unicode scalar range. This does
+not change what the base lexer accepts; it only defines browser display.
+
+The `<code>` opening and closing tags touch the actual source content, so there
+is no template indentation or newline in the code block. The intermediate code
+element also prevents HTML's special leading-newline removal for `<pre>`.
+CSS preserves whitespace and scrolls long lines rather than wrapping them.
+The document contains no scripts, external stylesheets or network resources.
+
+To change the theme, edit the stylesheet in `src/html_renderer.cpp`. Keep source
+and metadata on the same escaping path, and keep error CSS after base colors.
+The HTML guide explains the formatting/byte-display contract; the unit and CLI
+suites check escaping, AST classes, output failures and recovered exports.
+`run.ps1 -Html` creates the destination's parent, then lets the C++ executable
+save the document directly instead of piping HTML through PowerShell encoding.

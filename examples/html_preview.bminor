@@ -1,0 +1,18 @@
+// Step 11: tags, entities and quotes stay literal inside the browser preview.
+double_value: function integer (value: integer) = {
+    return value * 2;
+}
+
+main: function integer () = {
+    caption: string = "<title>Source text</title> & \"quotes\"";
+    marker: char = '<';
+    enabled: boolean = true;
+    result: integer = double_value(21);
+
+    if (enabled && result >= 42) {
+        print caption, marker, result;
+    } else {
+        print "No result\n";
+    }
+    return 0;
+}

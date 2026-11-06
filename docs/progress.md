@@ -393,4 +393,48 @@ Validation passed:
 ANSI display depends on terminal support for SGR/256-color/italic styling. Roles
 still describe syntax; semantic name/type checking remains for later phases.
 
-Next review gate: user approval before step 11 (standalone HTML/CSS rendering).
+Step 11 was approved by the user after reviewing ANSI rendering.
+
+## Step 11: standalone HTML/CSS rendering
+
+Implemented:
+
+- A standard C++11 HTML renderer using the existing AST-refined spans, with a
+  complete document, escaped filename heading, embedded CSS and no scripts/assets.
+- Separate CSS classes for all visible roles, default-colored variables,
+  function-name highlighting and red wavy error underlines.
+- Literal HTML escaping for source/metadata, untouched spaces/tabs/LF, CR
+  references, and code boundaries that preserve initial/final source newlines.
+- UTF-8 comment/metadata support within spans and visible `\xHH` fallback for
+  unsupported controls or invalid UTF-8 bytes.
+- Shared pre-output span validation for ANSI/HTML without changing ANSI behavior.
+- `--html` stdout, optional binary `--output` export, checked writes/closes,
+  repeated export support and conservative source-content overwrite protection.
+- `run.ps1 -Html [-Output path]`, default `output/highlight.html` with parent
+  creation, a runnable HTML-text example and updated English comments/guides.
+- Eleven HTML unit groups and a native CLI suite for file/stdout/error paths.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 in strict C++11 with configured warnings.
+- All 17 CTest targets passed, including the 11 HTML groups and all existing
+  lexer/parser/classifier/ANSI regressions.
+- Checked standalone structure/CSS, all roles, same-name AST contexts, literal
+  tags/entities/quotes, escaped metadata and absence of injected source elements.
+- Verified source text for empty/whitespace input, leading blank lines, tabs,
+  CRLF/CR/LF, trailing spaces and no final newline; checked UTF-8 and bad bytes.
+- Verified file/stdout byte equality, repeated exports, five syntax and six
+  lexical diagnostics, complete recovered HTML, and expected exit statuses.
+- Checked output-open errors, missing-source preservation, incompatible options
+  and source protection through alternate paths and a hard link.
+- Checked 15 generated pages in headless Chrome: source DOM text, computed colors,
+  keyword weight, comment italics, error underlines, whitespace/scrolling CSS,
+  no scripts/external assets, and the seven expected work roles.
+- Verified default/custom PowerShell exports, spaced paths and recovered-error
+  status forwarding; inspected a browser screenshot of the classification page.
+
+The compiler and maintained CTest suites do not depend on browser tooling.
+HTML uses a documented display fallback for bytes that cannot be represented
+faithfully as ordinary browser text; original source coordinates stay unchanged.
+
+Next review gate: user approval before step 12 (end-to-end checks and submission documentation).

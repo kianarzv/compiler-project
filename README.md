@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 10
+## Current state: step 11
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -35,6 +35,10 @@ The table retains comments, exact byte offsets and optional whitespace rows.
 `--ansi` displays the complete source with terminal colors based on those roles.
 It preserves original formatting and underlines invalid/discarded source in red.
 Diagnostics remain on stderr, including when a recovered preview is available.
+
+`--html` exports the same source roles as a standalone page with embedded CSS.
+It preserves source formatting, escapes HTML text and also supports recovered
+previews. The PowerShell script saves a ready-to-open file with `-Html`.
 
 ## Build and run on Windows
 
@@ -81,7 +85,7 @@ Program @examples/declarations.bminor:2:1 type=null
 `Type integer` records source syntax; `type=null` is the separate semantic
 annotation reserved for a later project phase. The sample also contains nested
 array initializers and functions with ordinary/unsized-array parameters.
-`-Ast`, `-Tokens`, `-Classify` and `-Ansi` are alternative display modes. Whitespace
+`-Ast`, `-Tokens`, `-Classify`, `-Ansi` and `-Html` are alternative modes. Whitespace
 display applies to token and classification tables.
 
 To inspect the new AST-based source roles:
@@ -117,7 +121,24 @@ rendering after errors. Whitespace is always included in ANSI output.
 The script prints build messages before the preview. For a pure highlighted
 stream, run `.\build\bminor.exe --ansi examples/statements.bminor` directly.
 See `docs/ansi-rendering.md` for the palette, binary-safe saving and terminal
-requirements. Standalone HTML/CSS output is planned for step 11.
+requirements.
+
+To generate a standalone browser preview:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/html_preview.bminor -Html
+```
+
+Open `output/highlight.html` in your browser. The file includes all CSS and
+works offline without JavaScript. Add `-Output "output/my preview.html"` to
+choose a destination. The sample contains HTML-looking string text, which is
+displayed literally alongside AST-based function highlighting.
+
+Use `-Source examples/syntax_errors.bminor -Html -Output output/errors.html`
+for a full preview with red error underlines; five diagnostics and exit code 1
+are expected. Repeated exports can replace the previous HTML file. The CLI
+refuses to overwrite files containing the loaded source's exact contents.
+See `docs/html-rendering.md` for options, escaping and invalid-byte display rules.
 
 To inspect a complete program with function bodies and statements:
 
@@ -227,6 +248,8 @@ cmake --build build
 .\build\bminor.exe --classify --show-whitespace examples/classification.bminor
 .\build\bminor.exe --ansi examples/statements.bminor
 .\build\bminor.exe --ansi examples/syntax_errors.bminor
+New-Item -ItemType Directory -Force output | Out-Null
+.\build\bminor.exe --html --output output/highlight.html examples/html_preview.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -244,8 +267,8 @@ main: function integer () = {
 ```
 
 Exit codes: `0` for success or help, `1` for file/output/lexical/parser errors, and `2`
-for incorrect command-line usage. Lexical errors affect token, AST and
-classification and ANSI modes; parser errors affect AST, classification and ANSI modes.
+for incorrect command-line usage. Lexical errors affect token, AST, classification,
+ANSI and HTML modes; parser errors affect AST, classification, ANSI and HTML modes.
 Byte counts depend on the file's line endings. Default source-display mode only reads and shows the file;
 it does not perform lexical validation.
 
@@ -266,6 +289,10 @@ it does not perform lexical validation.
   categories, AST-based source roles and independent error decorations.
 - `include/bminor/ansi_renderer.hpp` and `src/ansi_renderer.cpp`: terminal palette,
   validated source spans and original-byte rendering with per-token resets.
+- `include/bminor/html_renderer.hpp` and `src/html_renderer.cpp`: standalone page,
+  CSS classes, source/metadata escaping and browser text formatting.
+- `include/bminor/render_support.hpp` and `src/render_support.cpp`: shared
+  source-partition validation before either renderer writes output.
 - `include/bminor/console_output.hpp` and `src/console_output.cpp`: CLI-only
   Windows binary-stdout adapter to preserve line endings.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
@@ -292,6 +319,10 @@ it does not perform lexical validation.
   error precedence, recovery, invalid spans and output failure handling.
 - `tests/check_ansi_cli.cmake`: colored CLI output, diagnostics/status, conflicts
   and byte-exact mixed-newline capture.
+- `tests/html_tests.cpp`: 11 groups for HTML structure, literal text, AST roles,
+  formatting, Unicode/invalid bytes, error classes and stream/span failures.
+- `tests/check_html_cli.cmake`: saved/stdout HTML, recovery, status, source
+  protection, output failures and invalid option combinations.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -303,8 +334,11 @@ it does not perform lexical validation.
 - `docs/error-recovery.md`: panic-mode synchronization, error nodes and progress rules.
 - `docs/syntax-classification.md`: source-span roles and the shared renderer contract.
 - `docs/ansi-rendering.md`: terminal rendering, palette, stream contract and usage.
+- `docs/html-rendering.md`: standalone browser export, classes, escaping and usage.
 
 Source loading and ANSI output retain original bytes and line endings.
+HTML preserves text formatting with character references and a documented
+display policy for invalid bytes.
 Generated files stay in `build/` or `output/`.
 Reference documents are kept locally and are excluded from Git.
 The `.local/` directory contains untracked development checks; use `examples/`

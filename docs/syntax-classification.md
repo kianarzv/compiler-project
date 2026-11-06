@@ -2,7 +2,8 @@
 
 Step 9 creates the source categories shared by the renderers. Its `--classify`
 mode prints a plain table for inspection. Step 10 adds ANSI colors using these
-spans (see `ansi-rendering.md`); HTML/CSS is planned for step 11. Classification
+spans (see `ansi-rendering.md`); step 11 adds standalone HTML/CSS using the same
+result (see `html-rendering.md`). Classification
 is based on tokens plus the AST, not regular expressions or a global list of
 known function spellings.
 

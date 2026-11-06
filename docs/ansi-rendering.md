@@ -108,9 +108,9 @@ return 2. `--show-whitespace` is only for the inspection tables; ANSI output
 always includes whitespace.
 
 Change `style_for()` in `src/ansi_renderer.cpp` to adjust the palette. Change
-the classifier when a source role needs different AST handling. The planned
-HTML renderer will reuse the same classification with its own escaping/styles.
-It will not need terminal or parser changes.
+the classifier when a source role needs different AST handling. The HTML renderer
+from step 11 reuses the same classification with its own escaping/styles; see
+`html-rendering.md`. Both renderers validate spans through `render_support.cpp`.
 
 `tests/ansi_tests.cpp` checks the palette, context-sensitive names, resets,
 formatting, error precedence, fallback/recovery, raw bytes, invalid spans and

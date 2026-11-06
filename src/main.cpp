@@ -1,5 +1,6 @@
 #include "bminor/ansi_renderer.hpp"
 #include "bminor/console_output.hpp"
+#include "bminor/html_renderer.hpp"
 #include "bminor/lexer.hpp"
 #include "bminor/parser.hpp"
 #include "bminor/source_file.hpp"
@@ -7,29 +8,34 @@
 #include "bminor/text_output.hpp"
 
 #include <exception>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
 namespace {
 
-enum class OutputMode { Source, Tokens, Ast, Classify, Ansi };
+enum class OutputMode { Source, Tokens, Ast, Classify, Ansi, Html };
 
 struct Options {
     std::string path;
     OutputMode mode = OutputMode::Source;
     bool show_whitespace = false;
+    std::string output_path;
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 10\n"
-        << "Usage: bminor [--tokens | --ast | --classify | --ansi] [--show-whitespace] [--] <source-file>\n"
+    out << "B-Minor Front End - Step 11\n"
+        << "Usage: bminor [--tokens | --ast | --classify | --ansi | --html] [options] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
         << "--tokens: show token kinds, lexemes and source locations.\n"
         << "--ast: parse declarations and show their syntax tree.\n"
         << "--classify: show source spans with AST-based syntax roles.\n"
         << "--ansi: highlight the complete source for an ANSI-capable terminal.\n"
+        << "--html: emit a standalone HTML/CSS document on stdout.\n"
+        << "--output <file>: save HTML directly to a file (requires --html).\n"
         << "--show-whitespace: include whitespace in token/classification tables.\n\n"
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
@@ -62,6 +68,16 @@ Options parse_options(int argc, char* argv[]) {
             select_mode(options, OutputMode::Classify);
         } else if (read_options && argument == "--ansi") {
             select_mode(options, OutputMode::Ansi);
+        } else if (read_options && argument == "--html") {
+            select_mode(options, OutputMode::Html);
+        } else if (read_options && argument == "--output") {
+            if (!options.output_path.empty()) {
+                throw std::invalid_argument("Specify --output only once.");
+            }
+            if (i + 1 >= argc || std::string(argv[i + 1]).empty() || argv[i + 1][0] == '-') {
+                throw std::invalid_argument("--output requires a file path (use ./ for a leading dash).");
+            }
+            options.output_path = argv[++i];
         } else if (read_options && argument == "--show-whitespace") {
             options.show_whitespace = true;
         } else if (read_options && !argument.empty() && argument[0] == '-') {
@@ -80,6 +96,9 @@ Options parse_options(int argc, char* argv[]) {
     if (options.show_whitespace && options.mode != OutputMode::Tokens
         && options.mode != OutputMode::Classify) {
         throw std::invalid_argument("--show-whitespace requires --tokens or --classify.");
+    }
+    if (!options.output_path.empty() && options.mode != OutputMode::Html) {
+        throw std::invalid_argument("--output requires --html.");
     }
     return options;
 }
@@ -162,6 +181,47 @@ bool print_ansi(const bminor::SourceFile& source) {
     return !result.has_errors();
 }
 
+void check_html_destination(const bminor::SourceFile& source, const std::string& path) {
+    // Comparing spellings alone misses ./ aliases, case differences and hard
+    // links. Conservatively refuse any existing file with the source's exact
+    // contents, using only standard streams and at most one extra byte at a
+    // time. A previous generated HTML document can still be replaced normally.
+    std::ifstream existing(path, std::ios::binary);
+    if (!existing) { return; }
+    for (char expected : source.text) {
+        char actual = 0;
+        if (!existing.get(actual) || actual != expected) { return; }
+    }
+    if (existing.peek() == std::char_traits<char>::eof() && !existing.bad()) {
+        throw std::runtime_error("Refusing to overwrite a file containing the source: " + path);
+    }
+}
+
+bool print_html(const bminor::SourceFile& source, const std::string& output_path) {
+    const auto result = bminor::classify_source(source);
+    if (output_path.empty()) {
+        bminor::prepare_binary_stdout();
+        bminor::render_html(std::cout, source, result.spans);
+        std::cout.flush();
+        if (!std::cout) { throw std::runtime_error("Could not flush HTML output."); }
+    } else {
+        // Finish rendering before opening/truncating an output file. Analysis
+        // errors are allowed: a recovered document is useful for inspection.
+        std::ostringstream document;
+        bminor::render_html(document, source, result.spans);
+        check_html_destination(source, output_path);
+        std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
+        if (!output) { throw std::runtime_error("Cannot open HTML output: " + output_path); }
+        const std::string text = document.str();
+        output.write(text.data(), static_cast<std::streamsize>(text.size()));
+        output.close();
+        if (!output) { throw std::runtime_error("Cannot write HTML output: " + output_path); }
+        std::cout << "Saved HTML: " << output_path << '\n';
+    }
+    for (const auto& error : result.diagnostics) { bminor::write_diagnostic(std::cerr, error); }
+    return !result.has_errors();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -181,6 +241,8 @@ int main(int argc, char* argv[]) {
             return print_classification(source, options.show_whitespace) ? 0 : 1;
         } else if (options.mode == OutputMode::Ansi) {
             return print_ansi(source) ? 0 : 1;
+        } else if (options.mode == OutputMode::Html) {
+            return print_html(source, options.output_path) ? 0 : 1;
         } else {
             std::cout << "Loaded: " << source.path << '\n'
                       << "Bytes: " << source.text.size() << '\n'

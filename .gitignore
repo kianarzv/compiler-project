@@ -1,0 +1,9 @@
+/build/
+/output/
+/reference_materials/
+/.local/
+/.vscode/
+*.exe
+*.o
+*.obj
+*.a

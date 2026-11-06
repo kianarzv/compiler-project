@@ -1,0 +1,4 @@
+main: function integer () = {
+    print "Hello, B-Minor!\n";
+    return 0;
+}

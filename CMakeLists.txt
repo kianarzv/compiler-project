@@ -6,7 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Keep the front-end logic in a library so the CLI and tests use the same code.
-add_library(bminor_core src/source_file.cpp src/token.cpp src/lexer.cpp)
+add_library(bminor_core
+    src/source_file.cpp
+    src/token.cpp
+    src/lexer.cpp
+    src/diagnostic.cpp
+)
 target_include_directories(bminor_core PUBLIC include)
 
 add_executable(bminor src/main.cpp)
@@ -17,9 +22,18 @@ if(BUILD_TESTING)
     add_executable(lexer_tests tests/lexer_tests.cpp)
     target_link_libraries(lexer_tests PRIVATE bminor_core)
     add_test(NAME lexer_tests COMMAND lexer_tests)
+    add_executable(diagnostic_tests tests/diagnostic_tests.cpp)
+    target_link_libraries(diagnostic_tests PRIVATE bminor_core)
+    add_test(NAME diagnostic_tests COMMAND diagnostic_tests)
+    add_test(NAME lexical_cli_recovery
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_lexical_cli.cmake
+    )
 endif()
 
-foreach(target bminor_core bminor lexer_tests)
+foreach(target bminor_core bminor lexer_tests diagnostic_tests)
     if(NOT TARGET ${target})
         continue()
     endif()

@@ -23,7 +23,7 @@ void require(bool condition, const std::string& message) {
 std::vector<Token> scan(const std::string& text, bool keep_whitespace = false) {
     const bminor::SourceFile source{"test.bminor", text};
     bminor::Lexer lexer(source);
-    const auto tokens = lexer.tokenize();
+    const auto tokens = lexer.tokenize().tokens;
     std::vector<Token> result;
     for (const auto& token : tokens) {
         if (keep_whitespace || token.kind != TokenKind::Whitespace) {
@@ -331,8 +331,8 @@ void empty_input_and_reuse() {
 
     const bminor::SourceFile source{"repeat.bminor", "if\r\n"};
     bminor::Lexer lexer(source);
-    const auto first = lexer.tokenize();
-    const auto second = lexer.tokenize();
+    const auto first = lexer.tokenize().tokens;
+    const auto second = lexer.tokenize().tokens;
     require(first.size() == second.size(), "Repeated scanning changed count.");
     for (std::size_t i = 0; i < first.size(); ++i) {
         require(first[i].kind == second[i].kind

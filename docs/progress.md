@@ -96,4 +96,39 @@ The scanner now recognizes the categories needed by the base dialect. Detailed
 error messages, length checks and lexical error exit codes remain for step 4.
 There is no parser or B-Minor program execution yet.
 
-Next review gate: user approval before step 4.
+Step 4 was approved by the user after reviewing the complete token scanner.
+
+## Step 4: lexical diagnostics and recovery
+
+Implemented:
+
+- A structured `Diagnostic` with a stable code, message, precise location and span.
+- A `LexResult` that owns recovered tokens and diagnostics together.
+- Nine lexical error codes covering unknown bytes, unfinished literals/comments,
+  character width, invalid literal bytes, unfinished escapes and length limits.
+- A 256-character identifier limit and 256-content-unit string limit, with an
+  escape pair counting as one unit and the raw source spelling retained.
+- One primary cause per invalid token, documented recovery boundaries and no
+  exceptions for malformed source input.
+- Diagnostics on stderr and lexical failure exit code 1 in `--tokens` mode.
+- A six-error sample in `examples/lexical_errors.bminor` and updated reading/rule docs.
+- Ten diagnostic regression groups and a real CLI recovery test, alongside the
+  existing 16 lexer regression groups.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and enabled warning flags, without warnings.
+- All three CTest targets passed: 16 lexer groups, 10 diagnostic groups and
+  the real CLI test for recovered output, stderr separation and exit code 1.
+- Checked identifier/string lengths at 255, 256 and 257 units, including
+  256 escaped units occupying more than 256 raw source bytes.
+- Verified diagnostic/token span consistency on 16 deterministic all-byte inputs,
+  while the existing 32 all-byte source-coverage cases remained valid.
+- Scanned all four maintained examples and reconstructed each file exactly from
+  the CLI token lexemes. Only the intentional error sample returned errors.
+- The error sample reported six diagnostics while retaining later `return` and
+  EOF tokens. Locations also matched a CRLF copy in a path containing spaces.
+- `run.ps1` forwarded all six diagnostics and exit code 1 for that CRLF copy;
+  original source-display mode still returned success without lexical validation.
+
+Next review gate: user approval before step 5 (B-Minor grammar and declarations).

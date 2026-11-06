@@ -1,0 +1,10 @@
+main: function integer () = {
+    value: integer = 12@;
+    empty: char = '';
+    pair: char = 'ab';
+    text: string = "missing closing quote
+    ready: boolean = true & false;
+    print "Scanning continues after the errors.\n";
+    return 0;
+}
+/* This comment has no closing marker.

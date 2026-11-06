@@ -6,17 +6,17 @@ The user approved using the base textbook dialect while the course-specific
 definition is unavailable. The reference is Douglas Thain's
 [Appendix B: The B-Minor Language](https://dthain.github.io/books/compiler/chapterB.pdf),
 sections B.2 through B.4. We do not add extensions from annual course variants.
-Step 3 extends the original word scanner with literals, symbols and comments.
-The detailed diagnostic system remains scheduled for step 4.
+Step 3 added literals, symbols and comments. Step 4 adds structured diagnostics,
+length limits and lexical failure exit status while preserving recovered tokens.
 
 ## Recognized forms
 
 | Form | Rule | Result |
 | --- | --- | --- |
-| Identifier candidate | `[a-zA-Z_][a-zA-Z0-9_]*` | An entire ASCII word, then checked against the reserved-word table |
+| Identifier candidate | `[a-zA-Z_][a-zA-Z0-9_]*`, at most 256 characters | An entire ASCII word, then checked against the reserved-word table |
 | Reserved word | Exact, case-sensitive table lookup | A keyword-specific kind or `BOOLEAN_LITERAL` |
 | Decimal integer | `[0-9]+` | `INTEGER_LITERAL`, without converting or changing the digits |
-| String | See quoted-literal rules below | `STRING_LITERAL` |
+| String | See quoted-literal rules below; at most 256 content units | `STRING_LITERAL` |
 | Character | Exactly one quoted unit, described below | `CHARACTER_LITERAL` |
 | Operators | `+ - * / % ^ ++ -- ! < <= > >= == != && \|\| =` | A distinct kind for each spelling |
 | Delimiters | `(` `)` `{` `}` `[` `]` `,` `;` `:` | A distinct kind for each delimiter |
@@ -94,9 +94,47 @@ found. Empty/multiple-unit character literals are also invalid. The next scan
 can still process whitespace and subsequent code. Unknown standalone bytes
 each produce one `INVALID` token; none are silently discarded.
 
-Identifier and string length limits will be checked with lexical diagnostics in
-step 4. The current scanner retains long words and validly closed strings as
-single tokens. Detailed causes and messages for invalid forms also come then.
+## Length limits
+
+Identifiers may contain up to 256 ASCII characters. A string may contain up to
+256 content units: each plain character or escape pair counts as one unit.
+Opening/closing quotes and the eventual runtime terminator are excluded. This
+content-unit interpretation makes the informal reference's string limit explicit.
+For example, 256 `\n` escape pairs are accepted despite occupying 512 source
+bytes, while 257 plain characters or 257 escape pairs are rejected.
+
+An overlong identifier or closed string is consumed as a whole and becomes one
+`INVALID` token with one diagnostic. It is never split into shorter tokens.
+Integer digits remain unconverted; integer value/range checking belongs to
+later value analysis and is unaffected by these identifier/string limits.
+
+## Diagnostics and recovery
+
+`Lexer::tokenize()` returns a `LexResult` containing both tokens and diagnostics.
+Each `INVALID` token has one primary diagnostic, with a stable code, English
+message, filename, line, column, byte offset and nonzero source-span length.
+
+| Code | Cause | Location and recovery |
+| --- | --- | --- |
+| `LEX001` | Unknown standalone byte, including a single `&` or `\|` | Point to that byte, consume it and continue. |
+| `LEX002` | Unfinished string | Point to the opening quote; stop before a physical newline or at EOF. |
+| `LEX003` | Unfinished character literal | Use the same boundary policy as an unfinished string. |
+| `LEX004` | Unfinished block comment | Point to `/*`; consume the remaining input through EOF. |
+| `LEX005` | Empty or multiple-unit character literal | Cover the whole quoted literal, then continue after its closing quote. |
+| `LEX006` | Non-printable or non-ASCII byte in a closed literal | Point to the first invalid byte; keep the complete literal as one invalid token. |
+| `LEX007` | Backslash immediately before physical newline or EOF | Point to the backslash; leave a following newline for whitespace scanning. |
+| `LEX008` | Identifier longer than 256 characters | Cover the complete identifier, then continue. |
+| `LEX009` | String longer than 256 content units | Cover the complete quoted string, then continue. |
+
+A literal with several problems gets one primary cause to avoid cascades. A
+dangling escape takes priority at the boundary; otherwise a missing closing
+quote takes priority over errors in the body. For a closed literal, the first
+invalid byte takes priority over character width or string length. Unknown
+standalone bytes still receive one separate diagnostic each.
+
+Errors are collected during scanning without printing or throwing for malformed
+input. The token stream still ends with EOF. A later `tokenize()` call resets
+the cursor and diagnostics, and cannot change a previously returned result.
 
 ## Locations and source preservation
 
@@ -115,5 +153,6 @@ in the CLI, but comments are always shown. Concatenating all lexemes reproduces
 the original input, and token offsets have no gaps. The CLI escapes control
 characters for readable table rows without changing tokens.
 
-`--tokens` currently returns success after scanning even if it prints `INVALID`
-rows. Step 4 will add lexical diagnostics and the corresponding failure status.
+In `--tokens` mode the recovered table is written to stdout, diagnostics are
+written to stderr, and any lexical error causes exit code 1 after scanning.
+A clean scan returns 0. The original source-display mode performs no lexing.

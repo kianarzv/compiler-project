@@ -2,9 +2,24 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace bminor {
 namespace {
+
+const std::size_t max_identifier_length = 256;
+const std::size_t max_string_length = 256;
+
+// Hex notation keeps control bytes, embedded nulls and non-ASCII input readable
+// in errors without inserting those bytes into a terminal message.
+std::string byte_name(char c) {
+    const char hex[] = "0123456789ABCDEF";
+    const unsigned char byte = static_cast<unsigned char>(c);
+    std::string result = "0x";
+    result += hex[byte >> 4];
+    result += hex[byte & 15];
+    return result;
+}
 
 // Explicit ASCII checks follow the documented identifier rule. Locale-aware
 // character functions could otherwise accept letters outside the language.
@@ -61,19 +76,22 @@ TokenKind classify_word(const std::string& word) {
 
 Lexer::Lexer(const SourceFile& source) : source_(source) {}
 
-std::vector<Token> Lexer::tokenize() {
+LexResult Lexer::tokenize() {
     // Resetting here makes a second call behave like the first one. Cursor
     // changes are confined to advance(), keeping location tracking consistent.
     offset_ = 0;
     line_ = 1;
     column_ = 1;
+    diagnostics_.clear();
 
     std::vector<Token> tokens;
     while (!at_end()) {
         tokens.push_back(scan_token());
     }
     tokens.push_back(Token{TokenKind::EndOfFile, "", current_location()});
-    return tokens;
+    // Transfer ownership rather than copying all lexemes and messages. A later
+    // call starts with fresh cursor/diagnostic state and cannot change this result.
+    return LexResult{std::move(tokens), std::move(diagnostics_)};
 }
 
 bool Lexer::at_end() const {
@@ -145,33 +163,64 @@ Token Lexer::scan_token() {
         } while (!at_end() && is_digit(peek()));
         kind = TokenKind::IntegerLiteral;
     } else if (peek() == '"' || peek() == '\'') {
-        kind = scan_quoted(peek());
+        kind = scan_quoted(peek(), start);
     } else if (peek() == '/' && (peek(1) == '/' || peek(1) == '*')) {
         // A comment opener must win over the single-character division token.
-        kind = scan_comment();
+        kind = scan_comment(start);
     } else {
         kind = scan_symbol();
+        if (kind == TokenKind::Invalid) {
+            std::string message = "Unexpected byte "
+                + byte_name(source_.text[start.offset]) + ".";
+            if (source_.text[start.offset] == '&') {
+                message += " Use '&&' for logical AND.";
+            } else if (source_.text[start.offset] == '|') {
+                message += " Use '||' for logical OR.";
+            }
+            report(DiagnosticCode::UnknownByte, start, 1, message);
+        }
     }
 
     const std::string lexeme = source_.text.substr(start.offset,
                                                   offset_ - start.offset);
     if (kind == TokenKind::Identifier) {
         kind = classify_word(lexeme);
+        if (lexeme.size() > max_identifier_length) {
+            report(DiagnosticCode::IdentifierTooLong, start, lexeme.size(),
+                   "Identifier exceeds the 256-character limit.");
+            kind = TokenKind::Invalid;
+        }
     }
     return Token{kind, lexeme, start};
 }
 
-TokenKind Lexer::scan_quoted(char quote) {
+TokenKind Lexer::scan_quoted(char quote, const SourceLocation& start) {
     advance(); // Opening quote; the final lexeme will include both delimiters.
     std::size_t characters = 0;
-    bool valid = true;
+    bool has_invalid_byte = false;
+    SourceLocation invalid_byte = start;
 
     while (!at_end() && !is_line_ending(peek())) {
         if (peek() == quote) {
             advance();
             // An escape pair represents one character. Thus '\n' is a valid
             // character literal, while '' and 'ab' are not.
-            if (!valid || (quote == '\'' && characters != 1)) {
+            if (has_invalid_byte) {
+                report(DiagnosticCode::InvalidLiteralByte, invalid_byte, 1,
+                       "Byte " + byte_name(source_.text[invalid_byte.offset])
+                       + " is not printable ASCII; use an escape for control characters.");
+                return TokenKind::Invalid;
+            }
+            if (quote == '\'' && characters != 1) {
+                report(DiagnosticCode::InvalidCharacterLength, start,
+                       offset_ - start.offset,
+                       "Character literal must contain exactly one character; found "
+                       + std::to_string(characters) + ".");
+                return TokenKind::Invalid;
+            }
+            if (quote == '"' && characters > max_string_length) {
+                report(DiagnosticCode::StringTooLong, start, offset_ - start.offset,
+                       "String literal exceeds the 256-character limit.");
                 return TokenKind::Invalid;
             }
             return quote == '"' ? TokenKind::StringLiteral
@@ -179,10 +228,13 @@ TokenKind Lexer::scan_quoted(char quote) {
         }
 
         if (peek() == '\\') {
+            const SourceLocation escape = current_location();
             advance();
             // A trailing backslash cannot escape EOF or a physical newline.
             // Leave a newline for the whitespace scanner and resume afterward.
             if (at_end() || is_line_ending(peek())) {
+                report(DiagnosticCode::IncompleteEscape, escape, 1,
+                       "Incomplete escape: expected a character after the backslash.");
                 return TokenKind::Invalid;
             }
         }
@@ -190,8 +242,9 @@ TokenKind Lexer::scan_quoted(char quote) {
         // The base dialect permits a backslash followed by a printable ASCII
         // character. Keep the spelling unchanged; value decoding is a separate
         // concern. Unescaped control/non-ASCII bytes invalidate the whole token.
-        if (!is_printable_ascii(peek())) {
-            valid = false;
+        if (!is_printable_ascii(peek()) && !has_invalid_byte) {
+            has_invalid_byte = true;
+            invalid_byte = current_location();
         }
         advance();
         ++characters;
@@ -199,10 +252,15 @@ TokenKind Lexer::scan_quoted(char quote) {
 
     // EOF or a physical newline before the closing quote: keep the partial
     // literal as one INVALID token instead of interpreting its contents as code.
+    report(quote == '"' ? DiagnosticCode::UnterminatedString
+                        : DiagnosticCode::UnterminatedCharacter,
+           start, offset_ - start.offset,
+           quote == '"' ? "Unterminated string literal; expected a closing double quote."
+                        : "Unterminated character literal; expected a closing single quote.");
     return TokenKind::Invalid;
 }
 
-TokenKind Lexer::scan_comment() {
+TokenKind Lexer::scan_comment(const SourceLocation& start) {
     advance(); // The caller already confirmed that the first byte is '/'.
     if (match('/')) {
         while (!at_end() && !is_line_ending(peek())) {
@@ -222,6 +280,8 @@ TokenKind Lexer::scan_comment() {
     }
     // Block comments do not nest. If the first closing marker never appears,
     // the INVALID token covers the opener and all remaining source bytes.
+    report(DiagnosticCode::UnterminatedBlockComment, start, offset_ - start.offset,
+           "Unterminated block comment; expected '*/' before end of file.");
     return TokenKind::Invalid;
 }
 
@@ -254,6 +314,13 @@ TokenKind Lexer::scan_symbol() {
     case ':': return TokenKind::Colon;
     default:  return TokenKind::Invalid;
     }
+}
+
+void Lexer::report(DiagnosticCode code, const SourceLocation& location,
+                   std::size_t length, const std::string& message) {
+    // Scanning helpers report data, never print or throw for malformed input.
+    // The CLI decides how to render errors and which process exit code to use.
+    diagnostics_.push_back(Diagnostic{code, location, length, message});
 }
 
 } // namespace bminor

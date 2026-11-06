@@ -15,7 +15,7 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 3\n"
+    out << "B-Minor Front End - Step 4\n"
         << "Usage: bminor [--tokens [--show-whitespace]] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
@@ -23,7 +23,7 @@ void print_usage(std::ostream& out) {
         << "--show-whitespace: include whitespace rows in the token display.\n\n"
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
-        << "Detailed lexical diagnostics are scheduled for step 4.\n";
+        << "In token mode, errors are reported on stderr after scanning; exit code 1.\n";
 }
 
 Options parse_options(int argc, char* argv[]) {
@@ -81,11 +81,11 @@ void write_escaped(std::ostream& out, const std::string& text) {
     out << '"';
 }
 
-void print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
+bool print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
     bminor::Lexer lexer(source);
-    const auto tokens = lexer.tokenize();
+    const auto result = lexer.tokenize();
     std::cout << "Location\tKind\tLexeme\n";
-    for (const auto& token : tokens) {
+    for (const auto& token : result.tokens) {
         // Keep trivia in the lexer result for future renderers. Hiding it is
         // only a display choice and never changes source positions or offsets.
         if (!show_whitespace && token.kind == bminor::TokenKind::Whitespace) {
@@ -97,6 +97,13 @@ void print_tokens(const bminor::SourceFile& source, bool show_whitespace) {
         write_escaped(std::cout, token.lexeme);
         std::cout << '\n';
     }
+    // Keep the recovered token table on stdout and messages on stderr. Errors
+    // affect the final exit status, but do not prevent later tokens or EOF output.
+    std::cout.flush();
+    for (const auto& diagnostic : result.diagnostics) {
+        bminor::write_diagnostic(std::cerr, diagnostic);
+    }
+    return !result.has_errors();
 }
 
 } // namespace
@@ -111,7 +118,7 @@ int main(int argc, char* argv[]) {
         const Options options = parse_options(argc, argv);
         const bminor::SourceFile source = bminor::SourceFile::load(options.path);
         if (options.show_tokens) {
-            print_tokens(source, options.show_whitespace);
+            return print_tokens(source, options.show_whitespace) ? 0 : 1;
         } else {
             std::cout << "Loaded: " << source.path << '\n'
                       << "Bytes: " << source.text.size() << '\n'

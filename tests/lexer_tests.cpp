@@ -94,8 +94,8 @@ void source_locations() {
 }
 
 void source_coverage() {
-    // Include CRLF, a null and a non-ASCII byte. Even bytes that the partial
-    // lexer does not understand must survive in contiguous source slices.
+    // Include CRLF, a null and a non-ASCII byte. Even invalid input must survive
+    // in contiguous slices so highlighting can reproduce the original source.
     std::string text = "if \t\r\nname@";
     text.push_back('\0');
     text.push_back(static_cast<char>(0xFF));
@@ -117,10 +117,209 @@ void source_coverage() {
 void unsupported_input() {
     const auto tokens = scan("@if$9");
     expect_kinds(tokens, {TokenKind::Invalid, TokenKind::KwIf,
-                         TokenKind::Invalid, TokenKind::Invalid,
+                         TokenKind::Invalid, TokenKind::IntegerLiteral,
                          TokenKind::EndOfFile});
     require(tokens[0].lexeme == "@" && tokens[2].lexeme == "$"
-                && tokens[3].lexeme == "9", "Unsupported bytes were dropped.");
+                && tokens[3].lexeme == "9", "Input bytes were dropped.");
+}
+
+void decimal_literals_and_signs() {
+    const auto numbers = scan("0 007 123456789012345678901234567890");
+    expect_kinds(numbers, {TokenKind::IntegerLiteral, TokenKind::IntegerLiteral,
+                          TokenKind::IntegerLiteral, TokenKind::EndOfFile});
+    require(numbers[1].lexeme == "007", "Leading zeros were changed.");
+    require(numbers[2].lexeme == "123456789012345678901234567890",
+            "A large literal was converted or truncated during scanning.");
+
+    const auto signs = scan("a-12 -42 +7");
+    expect_kinds(signs, {TokenKind::Identifier, TokenKind::Minus,
+                        TokenKind::IntegerLiteral, TokenKind::Minus,
+                        TokenKind::IntegerLiteral, TokenKind::Plus,
+                        TokenKind::IntegerLiteral, TokenKind::EndOfFile});
+    const auto spaced = scan("a - 12 - 42 + 7");
+    require(signs.size() == spaced.size(), "Spacing changed arithmetic tokens.");
+    for (std::size_t i = 0; i < signs.size(); ++i) {
+        require(signs[i].kind == spaced[i].kind
+                    && signs[i].lexeme == spaced[i].lexeme,
+                "A sign was incorrectly attached to an integer.");
+    }
+}
+
+void operator_vocabulary() {
+    const auto tokens = scan("+ - * / % ^ ! < > = ++ -- <= >= == != && ||");
+    expect_kinds(tokens, {TokenKind::Plus, TokenKind::Minus, TokenKind::Star,
+                         TokenKind::Slash, TokenKind::Percent, TokenKind::Caret,
+                         TokenKind::Bang, TokenKind::Less, TokenKind::Greater,
+                         TokenKind::Assign, TokenKind::PlusPlus,
+                         TokenKind::MinusMinus, TokenKind::LessEqual,
+                         TokenKind::GreaterEqual, TokenKind::EqualEqual,
+                         TokenKind::BangEqual, TokenKind::AndAnd,
+                         TokenKind::OrOr, TokenKind::EndOfFile});
+    for (const auto& token : tokens) {
+        require(std::string(bminor::token_kind_name(token.kind)) != "UNKNOWN",
+                "An operator has no display label.");
+    }
+}
+
+void longest_operator_match() {
+    const auto tokens = scan("a+++b--->=c===d&&&e|||f");
+    expect_kinds(tokens, {TokenKind::Identifier, TokenKind::PlusPlus,
+                         TokenKind::Plus, TokenKind::Identifier,
+                         TokenKind::MinusMinus, TokenKind::Minus,
+                         TokenKind::GreaterEqual, TokenKind::Identifier,
+                         TokenKind::EqualEqual, TokenKind::Assign,
+                         TokenKind::Identifier, TokenKind::AndAnd,
+                         TokenKind::Invalid, TokenKind::Identifier,
+                         TokenKind::OrOr, TokenKind::Invalid,
+                         TokenKind::Identifier, TokenKind::EndOfFile});
+    require(tokens[6].lexeme == ">=", "Split a two-byte comparison.");
+    require(tokens[12].lexeme == "&" && tokens[15].lexeme == "|",
+            "Single bitwise operators must not become logical operators.");
+}
+
+void delimiters() {
+    const auto tokens = scan("(){}[],:;");
+    expect_kinds(tokens, {TokenKind::LeftParen, TokenKind::RightParen,
+                         TokenKind::LeftBrace, TokenKind::RightBrace,
+                         TokenKind::LeftBracket, TokenKind::RightBracket,
+                         TokenKind::Comma, TokenKind::Colon,
+                         TokenKind::Semicolon, TokenKind::EndOfFile});
+}
+
+void quoted_literals_and_escapes() {
+    const auto tokens = scan(
+        R"bminor("" "if // /*" "say \"hi\"" "\\" "\n\0\q" 'a' '\n' '\0' '\'' '\\' '\q')bminor");
+    expect_kinds(tokens, {TokenKind::StringLiteral, TokenKind::StringLiteral,
+                         TokenKind::StringLiteral, TokenKind::StringLiteral,
+                         TokenKind::StringLiteral, TokenKind::CharacterLiteral,
+                         TokenKind::CharacterLiteral, TokenKind::CharacterLiteral,
+                         TokenKind::CharacterLiteral, TokenKind::CharacterLiteral,
+                         TokenKind::CharacterLiteral, TokenKind::EndOfFile});
+    require(tokens[1].lexeme == R"bminor("if // /*")bminor",
+            "A comment opener inside a string started a comment.");
+    require(tokens[2].lexeme == R"bminor("say \"hi\"")bminor",
+            "An escaped quote ended a string too early.");
+    require(tokens[4].lexeme == R"bminor("\n\0\q")bminor",
+            "Escape sequences must retain their original spelling.");
+    require(tokens[8].lexeme == R"bminor('\'')bminor",
+            "Escaped character delimiter was not retained.");
+
+    const auto boundary = scan(R"bminor("a\\" next "a\"still")bminor");
+    expect_kinds(boundary, {TokenKind::StringLiteral, TokenKind::Identifier,
+                           TokenKind::StringLiteral, TokenKind::EndOfFile});
+    require(boundary[1].lexeme == "next", "Backslash parity hid a closing quote.");
+}
+
+void malformed_quoted_literals() {
+    const auto characters = scan(R"bminor('' 'ab' '\ab' 'z')bminor");
+    expect_kinds(characters, {TokenKind::Invalid, TokenKind::Invalid,
+                             TokenKind::Invalid, TokenKind::CharacterLiteral,
+                             TokenKind::EndOfFile});
+    const auto newline = scan("\"open\r\nreturn 1;");
+    expect_kinds(newline, {TokenKind::Invalid, TokenKind::KwReturn,
+                          TokenKind::IntegerLiteral, TokenKind::Semicolon,
+                          TokenKind::EndOfFile});
+    require(newline[0].lexeme == "\"open", "Partial string consumed the newline.");
+    require(newline[1].location.line == 2 && newline[1].location.column == 1,
+            "Failed to resume after a malformed string.");
+
+    const std::string dangling = std::string("\"tail") + '\\';
+    const auto eof = scan(dangling);
+    expect_kinds(eof, {TokenKind::Invalid, TokenKind::EndOfFile});
+    require(eof[0].lexeme == dangling, "Trailing backslash was lost at EOF.");
+    const auto continuation = scan(std::string("\"tail\\") + "\r\nif");
+    expect_kinds(continuation, {TokenKind::Invalid, TokenKind::KwIf,
+                               TokenKind::EndOfFile});
+
+    std::string invalid_bytes = "\"a";
+    invalid_bytes.push_back('\0');
+    invalid_bytes.push_back(static_cast<char>(0xFF));
+    invalid_bytes += "b\"";
+    const auto bytes = scan(invalid_bytes);
+    expect_kinds(bytes, {TokenKind::Invalid, TokenKind::EndOfFile});
+    require(bytes[0].lexeme == invalid_bytes, "Invalid string bytes were lost.");
+}
+
+void comments_and_locations() {
+    const auto tokens = scan("a/b// <= \"fake\"\r\nc/**/d/* one\n two */e");
+    expect_kinds(tokens, {TokenKind::Identifier, TokenKind::Slash,
+                         TokenKind::Identifier, TokenKind::LineComment,
+                         TokenKind::Identifier, TokenKind::BlockComment,
+                         TokenKind::Identifier, TokenKind::BlockComment,
+                         TokenKind::Identifier, TokenKind::EndOfFile});
+    require(tokens[3].lexeme == "// <= \"fake\"", "Line comment parsed as code.");
+    require(tokens[4].location.line == 2 && tokens[4].location.column == 1,
+            "Line comment included or miscounted its following newline.");
+    require(tokens[6].location.column == 6, "Empty block comment lost its span.");
+    require(tokens[7].lexeme == "/* one\n two */", "Block comment was changed.");
+    require(tokens[8].location.line == 3 && tokens[8].location.column == 8,
+            "Wrong location after a multiline block comment.");
+}
+
+void comment_boundaries() {
+    expect_kinds(scan("// tail"), {TokenKind::LineComment, TokenKind::EndOfFile});
+    expect_kinds(scan("/**/ /***/"), {TokenKind::BlockComment,
+                                     TokenKind::BlockComment, TokenKind::EndOfFile});
+    const auto nested = scan("/* outer /* inner */tail");
+    expect_kinds(nested, {TokenKind::BlockComment, TokenKind::Identifier,
+                         TokenKind::EndOfFile});
+    require(nested[1].lexeme == "tail", "Block comments must stop at first */.");
+    for (const std::string text : {"/*", "/*/", "/* never closed\r\n"}) {
+        const auto tokens = scan(text);
+        expect_kinds(tokens, {TokenKind::Invalid, TokenKind::EndOfFile});
+        require(tokens[0].lexeme == text, "Unclosed block comment lost bytes.");
+    }
+    expect_kinds(scan("/"), {TokenKind::Slash, TokenKind::EndOfFile});
+}
+
+void arbitrary_byte_coverage() {
+    // This checks invariants rather than expecting a particular tokenization:
+    // no gaps, no zero-length tokens, correct positions, and exactly one EOF.
+    // The deterministic data exercises every byte and many delimiter boundaries.
+    for (unsigned int seed = 0; seed < 32; ++seed) {
+        std::string text;
+        for (unsigned int i = 0; i < 256; ++i) {
+            text.push_back(static_cast<char>((i * 73 + seed * 19) & 255));
+        }
+        const auto tokens = scan(text, true);
+        require(tokens.size() <= text.size() + 1, "Scanner did not progress.");
+        std::size_t offset = 0;
+        std::size_t line = 1;
+        std::size_t column = 1;
+        std::size_t eof_count = 0;
+        for (const auto& token : tokens) {
+            require(token.location.offset == offset && token.location.line == line
+                        && token.location.column == column,
+                    "Arbitrary input produced an incorrect token location.");
+            require(token.lexeme == text.substr(offset, token.lexeme.size()),
+                    "Arbitrary input changed a source slice.");
+            if (token.kind == TokenKind::EndOfFile) {
+                ++eof_count;
+                require(token.lexeme.empty(), "EOF lexeme must be empty.");
+            } else {
+                require(!token.lexeme.empty(), "A token consumed no input.");
+            }
+            for (char c : token.lexeme) {
+                // Independent byte-wise location calculation: a CR counts the
+                // newline, and an immediately following LF must not count again.
+                if (c == '\r') {
+                    ++line;
+                    column = 1;
+                } else if (c == '\n') {
+                    if (offset == 0 || text[offset - 1] != '\r') {
+                        ++line;
+                    }
+                    column = 1;
+                } else {
+                    ++column;
+                }
+                ++offset;
+            }
+        }
+        require(offset == text.size() && eof_count == 1
+                    && tokens.back().kind == TokenKind::EndOfFile,
+                "Arbitrary input was not completely covered before EOF.");
+    }
 }
 
 void empty_input_and_reuse() {
@@ -162,6 +361,15 @@ int main() {
         {"source locations", source_locations},
         {"source coverage", source_coverage},
         {"unsupported input", unsupported_input},
+        {"decimal literals and signs", decimal_literals_and_signs},
+        {"operator vocabulary", operator_vocabulary},
+        {"longest operator match", longest_operator_match},
+        {"delimiters", delimiters},
+        {"quoted literals and escapes", quoted_literals_and_escapes},
+        {"malformed quoted literals", malformed_quoted_literals},
+        {"comments and locations", comments_and_locations},
+        {"comment boundaries", comment_boundaries},
+        {"arbitrary byte coverage", arbitrary_byte_coverage},
         {"empty input and repeated scanning", empty_input_and_reuse}
     };
     for (const auto& test : cases) {

@@ -15,14 +15,15 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 2\n"
+    out << "B-Minor Front End - Step 3\n"
         << "Usage: bminor [--tokens [--show-whitespace]] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
         << "--tokens: show token kinds, lexemes and source locations.\n"
         << "--show-whitespace: include whitespace rows in the token display.\n\n"
-        << "Step 2 recognizes words, boolean literals and whitespace.\n"
-        << "Other bytes are shown as INVALID until the lexer is extended.\n";
+        << "Recognizes base B-Minor literals, operators and comments.\n"
+        << "Unknown bytes or malformed tokens appear as INVALID.\n"
+        << "Detailed lexical diagnostics are scheduled for step 4.\n";
 }
 
 Options parse_options(int argc, char* argv[]) {

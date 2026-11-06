@@ -60,4 +60,40 @@ This step intentionally leaves numbers, strings, characters, operators,
 punctuation and comments for step 3. Their bytes appear as `INVALID` for now;
 diagnostics and lexical error exit codes are scheduled for step 4.
 
-Next review gate: user approval before step 3.
+Step 3 was approved by the user after reviewing these tokens.
+
+## Step 3: literals, operators, delimiters and comments
+
+Implemented:
+
+- Decimal integer tokens, with separate sign operators and unchanged digits.
+- Strings and one-unit character literals, including escaped quotes/backslashes.
+- All base operators and delimiters, with longest matching for two-byte symbols.
+- Line/block comments retained as tokens, with comment openers checked before `/`.
+- Boundaries for malformed quoted literals and unfinished block comments, which
+  produce `INVALID` tokens and retain their source bytes.
+- A complete-program sample in `examples/lexer_full.bminor`.
+- Updated English comments, formal rules and the code-reading guide.
+- Nine new regression groups, bringing the lexer suite to 16 groups.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and warning flags enabled; no warnings were emitted.
+- All 16 lexer regression groups passed through CTest, including escaped quotes,
+  sign boundaries, longest-match operators, comment boundaries and malformed input.
+- Verified complete byte coverage and source locations for 32 deterministic
+  inputs, each containing all 256 byte values in a different order.
+- Tokenized all three maintained examples without any `INVALID` tokens. The new
+  complete-program sample has 118 visible tokens, including its comments.
+- Reconstructed each example exactly from the CLI's escaped lexemes, including
+  a CRLF copy in a path with spaces; hiding whitespace changed only display rows.
+- Confirmed malformed input continues to EOF and code after an unfinished string
+  is still scanned. Detailed error messages remain scheduled for step 4.
+- Checked original source display, CLI usage/file errors and the PowerShell
+  build-and-run command with the full CRLF sample.
+
+The scanner now recognizes the categories needed by the base dialect. Detailed
+error messages, length checks and lexical error exit codes remain for step 4.
+There is no parser or B-Minor program execution yet.
+
+Next review gate: user approval before step 4.

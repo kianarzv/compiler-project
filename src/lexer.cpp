@@ -12,12 +12,25 @@ bool is_identifier_start(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
+bool is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
 bool is_identifier_part(char c) {
-    return is_identifier_start(c) || (c >= '0' && c <= '9');
+    return is_identifier_start(c) || is_digit(c);
 }
 
 bool is_whitespace(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+bool is_line_ending(char c) {
+    return c == '\r' || c == '\n';
+}
+
+bool is_printable_ascii(char c) {
+    const unsigned char byte = static_cast<unsigned char>(c);
+    return byte >= 32 && byte <= 126;
 }
 
 TokenKind classify_word(const std::string& word) {
@@ -67,8 +80,19 @@ bool Lexer::at_end() const {
     return offset_ >= source_.text.size();
 }
 
-char Lexer::peek() const {
-    return at_end() ? '\0' : source_.text[offset_];
+char Lexer::peek(std::size_t lookahead) const {
+    // Lookahead is used for two-character operators and comment openers.
+    // Check remaining bytes before indexing, including at the end of a file.
+    return lookahead < source_.text.size() - offset_
+        ? source_.text[offset_ + lookahead] : '\0';
+}
+
+bool Lexer::match(char expected) {
+    if (at_end() || peek() != expected) {
+        return false;
+    }
+    advance();
+    return true;
 }
 
 void Lexer::advance() {
@@ -113,10 +137,20 @@ Token Lexer::scan_token() {
             advance();
         } while (!at_end() && is_whitespace(peek()));
         kind = TokenKind::Whitespace;
+    } else if (is_digit(peek())) {
+        // A sign is an operator, not part of this token. This makes x-12 and
+        // x - 12 produce the same tokens; unary negation belongs to the parser.
+        do {
+            advance();
+        } while (!at_end() && is_digit(peek()));
+        kind = TokenKind::IntegerLiteral;
+    } else if (peek() == '"' || peek() == '\'') {
+        kind = scan_quoted(peek());
+    } else if (peek() == '/' && (peek(1) == '/' || peek(1) == '*')) {
+        // A comment opener must win over the single-character division token.
+        kind = scan_comment();
     } else {
-        // Always consume something, even if this step does not recognize it.
-        // This prevents unsupported input from trapping the lexer in a loop.
-        advance();
+        kind = scan_symbol();
     }
 
     const std::string lexeme = source_.text.substr(start.offset,
@@ -125,6 +159,101 @@ Token Lexer::scan_token() {
         kind = classify_word(lexeme);
     }
     return Token{kind, lexeme, start};
+}
+
+TokenKind Lexer::scan_quoted(char quote) {
+    advance(); // Opening quote; the final lexeme will include both delimiters.
+    std::size_t characters = 0;
+    bool valid = true;
+
+    while (!at_end() && !is_line_ending(peek())) {
+        if (peek() == quote) {
+            advance();
+            // An escape pair represents one character. Thus '\n' is a valid
+            // character literal, while '' and 'ab' are not.
+            if (!valid || (quote == '\'' && characters != 1)) {
+                return TokenKind::Invalid;
+            }
+            return quote == '"' ? TokenKind::StringLiteral
+                                : TokenKind::CharacterLiteral;
+        }
+
+        if (peek() == '\\') {
+            advance();
+            // A trailing backslash cannot escape EOF or a physical newline.
+            // Leave a newline for the whitespace scanner and resume afterward.
+            if (at_end() || is_line_ending(peek())) {
+                return TokenKind::Invalid;
+            }
+        }
+
+        // The base dialect permits a backslash followed by a printable ASCII
+        // character. Keep the spelling unchanged; value decoding is a separate
+        // concern. Unescaped control/non-ASCII bytes invalidate the whole token.
+        if (!is_printable_ascii(peek())) {
+            valid = false;
+        }
+        advance();
+        ++characters;
+    }
+
+    // EOF or a physical newline before the closing quote: keep the partial
+    // literal as one INVALID token instead of interpreting its contents as code.
+    return TokenKind::Invalid;
+}
+
+TokenKind Lexer::scan_comment() {
+    advance(); // The caller already confirmed that the first byte is '/'.
+    if (match('/')) {
+        while (!at_end() && !is_line_ending(peek())) {
+            advance();
+        }
+        return TokenKind::LineComment;
+    }
+
+    advance(); // Consume '*' from the confirmed block-comment opener.
+    while (!at_end()) {
+        if (peek() == '*' && peek(1) == '/') {
+            advance();
+            advance();
+            return TokenKind::BlockComment;
+        }
+        advance();
+    }
+    // Block comments do not nest. If the first closing marker never appears,
+    // the INVALID token covers the opener and all remaining source bytes.
+    return TokenKind::Invalid;
+}
+
+TokenKind Lexer::scan_symbol() {
+    // Consume the first byte unconditionally, then try a supported longer
+    // spelling. Even an unknown symbol must move the cursor to guarantee progress.
+    const char symbol = peek();
+    advance();
+    switch (symbol) {
+    case '+': return match('+') ? TokenKind::PlusPlus : TokenKind::Plus;
+    case '-': return match('-') ? TokenKind::MinusMinus : TokenKind::Minus;
+    case '*': return TokenKind::Star;
+    case '/': return TokenKind::Slash;
+    case '%': return TokenKind::Percent;
+    case '^': return TokenKind::Caret;
+    case '!': return match('=') ? TokenKind::BangEqual : TokenKind::Bang;
+    case '<': return match('=') ? TokenKind::LessEqual : TokenKind::Less;
+    case '>': return match('=') ? TokenKind::GreaterEqual : TokenKind::Greater;
+    case '=': return match('=') ? TokenKind::EqualEqual : TokenKind::Assign;
+    case '&': return match('&') ? TokenKind::AndAnd : TokenKind::Invalid;
+    case '|': return match('|') ? TokenKind::OrOr : TokenKind::Invalid;
+    case '(': return TokenKind::LeftParen;
+    case ')': return TokenKind::RightParen;
+    case '{': return TokenKind::LeftBrace;
+    case '}': return TokenKind::RightBrace;
+    case '[': return TokenKind::LeftBracket;
+    case ']': return TokenKind::RightBracket;
+    case ',': return TokenKind::Comma;
+    case ';': return TokenKind::Semicolon;
+    case ':': return TokenKind::Colon;
+    default:  return TokenKind::Invalid;
+    }
 }
 
 } // namespace bminor

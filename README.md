@@ -3,16 +3,19 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 2
+## Current state: step 3
 
-The program can display a source file or tokenize identifiers, base B-Minor
-keywords, boolean literals and whitespace. Tokens include their original lexeme,
-filename, line, column and byte offset. Source display from step 1 still works.
+The program can display a source file or tokenize base B-Minor words, decimal
+integers, booleans, strings, characters, operators, delimiters and comments.
+Tokens retain their exact text, filename, line, column and byte offset. Source
+display from step 1 still works.
 
-This is a partial lexer: numbers, strings, characters, punctuation, operators and
-comments are scheduled for step 3 and currently produce `INVALID` rows. For this
-step, use `examples/tokens_basic.bminor` to see the supported categories. This
-file is a lexical sample, not a complete B-Minor program.
+Use `examples/lexer_full.bminor` for the new complete-program sample, or
+`examples/tokens_basic.bminor` for the earlier word-boundary demonstration.
+Malformed literals, unfinished block comments and unknown bytes produce
+`INVALID` rows. Detailed error messages and error exit codes belong to step 4.
+Parsing and running B-Minor programs come later; this tool currently reads and
+tokenizes them.
 
 ## Build and run on Windows
 
@@ -34,14 +37,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source .\examples
 The script builds the executable before running it. Paths passed to the script
 are relative to the project directory, or can be absolute.
 
-To inspect the step-2 tokens:
+To inspect the step-3 tokens:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/tokens_basic.bminor -Tokens
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/lexer_full.bminor -Tokens
 ```
 
 Add `-ShowWhitespace` to include escaped spaces and line endings in the table.
-For example, the first line of the sample produces these non-whitespace tokens:
+Comments are shown even when whitespace is hidden. To compare with step 2,
+run `examples/tokens_basic.bminor`; its first line still produces:
 
 ```text
 examples/tokens_basic.bminor:1:1    KW_IF          "if"
@@ -62,6 +66,7 @@ cmake --build build
 .\build\bminor.exe --help
 .\build\bminor.exe --tokens examples/tokens_basic.bminor
 .\build\bminor.exe --tokens --show-whitespace examples/tokens_basic.bminor
+.\build\bminor.exe --tokens examples/lexer_full.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -91,7 +96,8 @@ full lexical diagnostics are scheduled for step 4.
 - `include/bminor/source_location.hpp`: filename and cursor coordinates.
 - `include/bminor/token.hpp` and `src/token.cpp`: token kinds, data and labels.
 - `include/bminor/lexer.hpp` and `src/lexer.cpp`: scanning and word classification.
-- `tests/lexer_tests.cpp`: keyword boundaries, positions, source coverage and EOF.
+- `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
+  comments, malformed input, positions and complete source coverage.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -101,3 +107,5 @@ full lexical diagnostics are scheduled for step 4.
 Source text is retained without newline conversion, since later output must
 preserve its formatting. Generated files stay in `build/` or `output/`.
 Reference documents are kept locally and are excluded from Git.
+The `.local/` directory contains untracked development checks; use `examples/`
+for the sample files maintained with the project.

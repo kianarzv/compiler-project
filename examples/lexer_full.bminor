@@ -1,0 +1,23 @@
+// Step 3: a complete program to inspect with --tokens.
+square: function integer (value: integer) = {
+    return value^2;
+}
+
+main: function integer () = {
+    values: array [3] integer = {0, 12, 345};
+    message: string = "A quote: \" and a backslash: \\";
+    newline: char = '\n';
+    enabled: boolean = true;
+    i: integer = 0;
+
+    /* Comments stay in the token stream,
+       including their original line endings. */
+    for (i = 0; i < 3; i++) {
+        if (enabled && values[i] >= 12) {
+            print message, square(values[i]), newline;
+        } else {
+            print "small\n";
+        }
+    }
+    return 0;
+}

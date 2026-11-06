@@ -9,7 +9,7 @@ namespace bminor {
 
 // Keywords have separate kinds so a later parser can match them directly.
 // true and false share a literal kind; their lexeme retains the actual value.
-// Additional literals and punctuation will be introduced in step 3.
+// Operators and delimiters also have distinct kinds for direct parser matching.
 enum class TokenKind {
     Identifier,
     KwArray,
@@ -26,6 +26,38 @@ enum class TokenKind {
     KwVoid,
     KwWhile,
     BooleanLiteral,
+    IntegerLiteral,
+    StringLiteral,
+    CharacterLiteral,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    Caret,
+    PlusPlus,
+    MinusMinus,
+    Bang,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    EqualEqual,
+    BangEqual,
+    AndAnd,
+    OrOr,
+    Assign,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    LeftBracket,
+    RightBracket,
+    Comma,
+    Semicolon,
+    Colon,
+    LineComment,
+    BlockComment,
     Whitespace,
     Invalid,
     EndOfFile

@@ -15,10 +15,11 @@ add_library(bminor_core
     src/parser.cpp
     src/text_output.cpp
     src/syntax_classifier.cpp
+    src/ansi_renderer.cpp
 )
 target_include_directories(bminor_core PUBLIC include)
 
-add_executable(bminor src/main.cpp)
+add_executable(bminor src/main.cpp src/console_output.cpp)
 target_link_libraries(bminor PRIVATE bminor_core)
 
 include(CTest)
@@ -44,6 +45,9 @@ if(BUILD_TESTING)
     add_executable(classifier_tests tests/classifier_tests.cpp)
     target_link_libraries(classifier_tests PRIVATE bminor_core)
     add_test(NAME classifier_tests COMMAND classifier_tests)
+    add_executable(ansi_tests tests/ansi_tests.cpp)
+    target_link_libraries(ansi_tests PRIVATE bminor_core)
+    add_test(NAME ansi_tests COMMAND ansi_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
@@ -88,11 +92,19 @@ if(BUILD_TESTING)
             -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/syntax_errors.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_classification_cli.cmake
     )
+    add_test(NAME ansi_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/classification.bminor
+            -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/syntax_errors.bminor
+            -DLEXICAL_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_ansi_cli.cmake
+    )
 endif()
 
 foreach(target IN ITEMS
     bminor_core bminor lexer_tests diagnostic_tests parser_tests
-    expression_tests statement_tests recovery_tests classifier_tests
+    expression_tests statement_tests recovery_tests classifier_tests ansi_tests
 )
     if(NOT TARGET ${target})
         continue()

@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 9
+## Current state: step 10
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -28,9 +28,13 @@ statements/declarations. Discarded regions appear as `ErrorStmt`/`ErrorDecl`;
 unclosed blocks at EOF are marked incomplete. Errors still cause exit code 1.
 
 `--classify` now combines lexical categories with AST-derived identifier roles,
-producing source spans for the upcoming color renderers. Function declarations,
+producing source spans for the color renderers. Function declarations,
 calls, variable declarations/references and parameter declarations are distinct.
 The table retains comments, exact byte offsets and optional whitespace rows.
+
+`--ansi` displays the complete source with terminal colors based on those roles.
+It preserves original formatting and underlines invalid/discarded source in red.
+Diagnostics remain on stderr, including when a recovered preview is available.
 
 ## Build and run on Windows
 
@@ -77,7 +81,7 @@ Program @examples/declarations.bminor:2:1 type=null
 `Type integer` records source syntax; `type=null` is the separate semantic
 annotation reserved for a later project phase. The sample also contains nested
 array initializers and functions with ordinary/unsized-array parameters.
-`-Ast`, `-Tokens` and `-Classify` are alternative display modes. Whitespace
+`-Ast`, `-Tokens`, `-Classify` and `-Ansi` are alternative display modes. Whitespace
 display applies to token and classification tables.
 
 To inspect the new AST-based source roles:
@@ -90,13 +94,30 @@ The same spelling `work` appears as `FUNCTION_DECLARATION`, `FUNCTION_CALL`,
 `VARIABLE_DECLARATION` or `VARIABLE_REFERENCE`, depending on its AST node.
 `(work)(value)` is also recognized as a call. Add `-ShowWhitespace` to include
 spaces and line endings. Each row shows location, offset, length, role, an error
-flag and the original escaped text; this step uses a plain table before adding
-ANSI and HTML colors. See `docs/syntax-classification.md` for all roles and rules.
+flag and the original escaped text. See `docs/syntax-classification.md` for all
+roles and rules.
 
 With syntax errors, classification uses the recovered AST and marks discarded
 regions without losing their base categories. With lexical errors, it returns
 complete lexical fallback spans and leaves uncertain names as `IDENTIFIER`.
 Diagnostics still go to stderr and cause exit code 1 in either case.
+
+To see highlighted source in an ANSI-capable terminal:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/statements.bminor -Ansi
+```
+
+Keywords are bold blue, types cyan, function names yellow, literals orange/green
+and comments gray/italic. Ordinary variable names retain the default color.
+Use `examples/classification.bminor` to compare function/variable occurrences of
+`work`, or `examples/syntax_errors.bminor` to see red underlines and continued
+rendering after errors. Whitespace is always included in ANSI output.
+
+The script prints build messages before the preview. For a pure highlighted
+stream, run `.\build\bminor.exe --ansi examples/statements.bminor` directly.
+See `docs/ansi-rendering.md` for the palette, binary-safe saving and terminal
+requirements. Standalone HTML/CSS output is planned for step 11.
 
 To inspect a complete program with function bodies and statements:
 
@@ -204,6 +225,8 @@ cmake --build build
 .\build\bminor.exe --ast examples/syntax_errors.bminor
 .\build\bminor.exe --classify examples/classification.bminor
 .\build\bminor.exe --classify --show-whitespace examples/classification.bminor
+.\build\bminor.exe --ansi examples/statements.bminor
+.\build\bminor.exe --ansi examples/syntax_errors.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -220,9 +243,9 @@ main: function integer () = {
 }
 ```
 
-Exit codes: `0` for success or help, `1` for file/lexical/parser errors, and `2`
+Exit codes: `0` for success or help, `1` for file/output/lexical/parser errors, and `2`
 for incorrect command-line usage. Lexical errors affect token, AST and
-classification modes; parser errors affect AST and classification modes.
+classification and ANSI modes; parser errors affect AST, classification and ANSI modes.
 Byte counts depend on the file's line endings. Default source-display mode only reads and shows the file;
 it does not perform lexical validation.
 
@@ -241,6 +264,10 @@ it does not perform lexical validation.
 - `include/bminor/text_output.hpp` and `src/text_output.cpp`: shared escaped text display.
 - `include/bminor/syntax_classifier.hpp` and `src/syntax_classifier.cpp`: lexical
   categories, AST-based source roles and independent error decorations.
+- `include/bminor/ansi_renderer.hpp` and `src/ansi_renderer.cpp`: terminal palette,
+  validated source spans and original-byte rendering with per-token resets.
+- `include/bminor/console_output.hpp` and `src/console_output.cpp`: CLI-only
+  Windows binary-stdout adapter to preserve line endings.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
   comments, malformed input, positions and complete source coverage.
 - `tests/diagnostic_tests.cpp`: 10 regression groups for error causes, spans,
@@ -261,6 +288,10 @@ it does not perform lexical validation.
 - `tests/classifier_tests.cpp`: 12 groups for roles, traversal, AST dependence,
   error fallback, immutability and complete source coverage.
 - `tests/check_classification_cli.cmake`: classification output modes and error status.
+- `tests/ansi_tests.cpp`: 11 groups for styles, AST names, exact source bytes,
+  error precedence, recovery, invalid spans and output failure handling.
+- `tests/check_ansi_cli.cmake`: colored CLI output, diagnostics/status, conflicts
+  and byte-exact mixed-newline capture.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -270,10 +301,11 @@ it does not perform lexical validation.
 - `docs/parser-design.md`: supported syntax, FIRST/FOLLOW decisions, precedence,
   AST ownership and current parser limitations.
 - `docs/error-recovery.md`: panic-mode synchronization, error nodes and progress rules.
-- `docs/syntax-classification.md`: source-span roles and the contract for future renderers.
+- `docs/syntax-classification.md`: source-span roles and the shared renderer contract.
+- `docs/ansi-rendering.md`: terminal rendering, palette, stream contract and usage.
 
-Source text is retained without newline conversion, since later output must
-preserve its formatting. Generated files stay in `build/` or `output/`.
+Source loading and ANSI output retain original bytes and line endings.
+Generated files stay in `build/` or `output/`.
 Reference documents are kept locally and are excluded from Git.
 The `.local/` directory contains untracked development checks; use `examples/`
 for the sample files maintained with the project.

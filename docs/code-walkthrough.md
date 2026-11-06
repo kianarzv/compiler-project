@@ -4,7 +4,8 @@
 
 1. `src/main.cpp` checks arguments. With no display option it shows the original
    source, as in step 1. `--tokens` calls `print_tokens()`; `--ast` calls
-   `print_ast()`. `--classify` calls `print_classification()`. Analysis modes
+   `print_ast()`. `--classify` calls `print_classification()` and `--ansi` calls
+   `print_ansi()`. Analysis modes
    cannot be combined; the `OutputMode` enum stores the single selected mode.
 2. `SourceFile::load()` opens the file in binary mode and stores its bytes. File
    errors become exceptions and are reported by `main()` with exit code 1.
@@ -187,8 +188,35 @@ shadowing do not contaminate unrelated occurrences. `mark_error()` marks the
 discarded regions represented by error nodes while preserving each base role;
 whitespace and zero-byte missing nodes are not decorated.
 
-The CLI reads each span's text from the original source and escapes it using
-the existing display helper. Future renderers will use the same spans and bytes
-with their own styles. Read `docs/syntax-classification.md` before changing role
+The classification table reads each span's text from the original source and
+escapes it using the existing display helper. The ANSI renderer uses the same
+spans and raw bytes with terminal styles. Read `docs/syntax-classification.md` before changing role
 or error precedence; `tests/classifier_tests.cpp` checks expected context and
 that source/AST data remain unchanged.
+
+## Follow an ANSI preview
+
+`print_ansi()` calls the same `classify_source()` entry point as the table. It
+passes the result to `render_ansi()` and leaves diagnostics on stderr. Even a
+failed analysis returns complete spans, so the whole file remains visible.
+The boolean return value determines exit status after rendering and diagnostics.
+
+`render_ansi()` first checks source identity, contiguous offsets, nonempty
+lengths and complete coverage. This catches a renderer/classifier integration
+mistake before any partial document is written. For each span, `style_for()`
+chooses a sequence based on role/error status. The renderer writes that sequence,
+copies the original source bytes and immediately writes a reset. Ordinary names
+and whitespace have no sequence. No AST pretty-printer or debug escaping is used.
+
+The small `prepare_binary_stdout()` CLI adapter runs before writing ANSI text.
+Windows CRT text mode would otherwise translate LF into CRLF; binary mode keeps
+the stored source endings intact, including when redirected. This adapter is
+compiled into the executable, while the renderer stays in the portable core
+library and accepts any `std::ostream`. File callers should use binary mode too.
+
+To change colors, edit `style_for()` in `src/ansi_renderer.cpp`. To change which
+occurrence counts as a call or declaration, edit the classifier instead. The
+English comments explain error precedence, reset boundaries and byte copying;
+`docs/ansi-rendering.md` lists the full palette and stream contract. The unit
+suite checks formatting/styles and the CLI suite captures actual binary output
+to catch newline translation that string-stream tests would miss.

@@ -353,4 +353,44 @@ Validation passed:
 Roles describe syntax rather than resolved symbols or types. This step produces
 inspectable spans; ANSI and HTML rendering remain for steps 10 and 11.
 
-Next review gate: user approval before step 10 (ANSI syntax rendering).
+Step 10 was approved by the user after reviewing source-span classification.
+
+## Step 10: ANSI syntax rendering
+
+Implemented:
+
+- An ostream-based renderer consuming the existing AST-refined source spans.
+- The suggested PDF palette for keywords, types, functions, literals, comments,
+  operators and errors, with default-colored variables/parameters.
+- Red underline error precedence, unchanged whitespace and immediate per-span
+  style resets so later tokens/the prompt do not inherit the previous style.
+- Exact original-byte copying, full pre-output span validation and write/flush
+  failure reporting; no headings or synthetic final newline in ANSI stdout.
+- `--ansi` / `run.ps1 -Ansi`, mutually exclusive with other display modes.
+- A small Windows-only CRT adapter to suppress stdout newline translation,
+  separate from the standard C++11 rendering core.
+- Explanatory English comments, a rendering guide and updated usage/walkthrough.
+- Eleven renderer unit groups and a real CLI suite including binary capture.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0, strict C++11 and configured warnings.
+- All 15 CTest targets passed, including the existing lexer/parser/classifier
+  suites, 11 new rendering groups and the ANSI CLI checks.
+- Checked the exact palette, resets, AST-derived function/default-variable
+  distinction, grouped calls, recovered syntax and lexical fallback.
+- Verified tabs, spaces, multiline comments, raw literals, arbitrary byte values,
+  source-authored escape bytes, empty input and absent final newline.
+- Captured the native CLI stream to a file and compared bytes after removing
+  generated SGR; mixed CRLF/CR/LF and a spaced filename were preserved exactly.
+- Checked five syntax and six lexical messages on stderr, full source on stdout,
+  expected exit code 1 and usage status 2 for incompatible options.
+- Passed 15 additional native-byte/PowerShell smoke checks across all six valid
+  syntax samples, both error samples, CRLF/spaced paths, empty/whitespace input,
+  no-final-newline input and all byte values. `run.ps1 -Ansi` forwarded normal
+  output and the recovered preview with their expected statuses.
+
+ANSI display depends on terminal support for SGR/256-color/italic styling. Roles
+still describe syntax; semantic name/type checking remains for later phases.
+
+Next review gate: user approval before step 11 (standalone HTML/CSS rendering).

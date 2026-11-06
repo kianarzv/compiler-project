@@ -3,6 +3,7 @@ param(
     [switch]$Tokens,
     [switch]$Ast,
     [switch]$Classify,
+    [switch]$Ansi,
     [switch]$ShowWhitespace
 )
 
@@ -24,6 +25,7 @@ try {
     if ($Tokens) { $programArgs += "--tokens" }
     if ($Ast) { $programArgs += "--ast" }
     if ($Classify) { $programArgs += "--classify" }
+    if ($Ansi) { $programArgs += "--ansi" }
     if ($ShowWhitespace) { $programArgs += "--show-whitespace" }
     $programArgs += "--"
     $programArgs += $Source

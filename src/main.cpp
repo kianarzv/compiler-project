@@ -1,3 +1,5 @@
+#include "bminor/ansi_renderer.hpp"
+#include "bminor/console_output.hpp"
 #include "bminor/lexer.hpp"
 #include "bminor/parser.hpp"
 #include "bminor/source_file.hpp"
@@ -11,7 +13,7 @@
 
 namespace {
 
-enum class OutputMode { Source, Tokens, Ast, Classify };
+enum class OutputMode { Source, Tokens, Ast, Classify, Ansi };
 
 struct Options {
     std::string path;
@@ -20,13 +22,14 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 9\n"
-        << "Usage: bminor [--tokens | --ast | --classify] [--show-whitespace] [--] <source-file>\n"
+    out << "B-Minor Front End - Step 10\n"
+        << "Usage: bminor [--tokens | --ast | --classify | --ansi] [--show-whitespace] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
         << "--tokens: show token kinds, lexemes and source locations.\n"
         << "--ast: parse declarations and show their syntax tree.\n"
         << "--classify: show source spans with AST-based syntax roles.\n"
+        << "--ansi: highlight the complete source for an ANSI-capable terminal.\n"
         << "--show-whitespace: include whitespace in token/classification tables.\n\n"
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
@@ -57,6 +60,8 @@ Options parse_options(int argc, char* argv[]) {
             select_mode(options, OutputMode::Ast);
         } else if (read_options && argument == "--classify") {
             select_mode(options, OutputMode::Classify);
+        } else if (read_options && argument == "--ansi") {
+            select_mode(options, OutputMode::Ansi);
         } else if (read_options && argument == "--show-whitespace") {
             options.show_whitespace = true;
         } else if (read_options && !argument.empty() && argument[0] == '-') {
@@ -145,6 +150,18 @@ bool print_classification(const bminor::SourceFile& source, bool show_whitespace
     return !result.has_errors();
 }
 
+bool print_ansi(const bminor::SourceFile& source) {
+    const auto result = bminor::classify_source(source);
+    bminor::prepare_binary_stdout();
+    bminor::render_ansi(std::cout, source, result.spans);
+    std::cout.flush();
+    if (!std::cout) { throw std::runtime_error("Could not flush ANSI output."); }
+    // Even a recovered or lexically invalid program has full source coverage.
+    // Keep that preview on stdout and report analysis failures separately.
+    for (const auto& error : result.diagnostics) { bminor::write_diagnostic(std::cerr, error); }
+    return !result.has_errors();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -162,6 +179,8 @@ int main(int argc, char* argv[]) {
             return print_ast(source) ? 0 : 1;
         } else if (options.mode == OutputMode::Classify) {
             return print_classification(source, options.show_whitespace) ? 0 : 1;
+        } else if (options.mode == OutputMode::Ansi) {
+            return print_ansi(source) ? 0 : 1;
         } else {
             std::cout << "Loaded: " << source.path << '\n'
                       << "Bytes: " << source.text.size() << '\n'

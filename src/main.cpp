@@ -1,6 +1,7 @@
 #include "bminor/lexer.hpp"
 #include "bminor/parser.hpp"
 #include "bminor/source_file.hpp"
+#include "bminor/syntax_classifier.hpp"
 #include "bminor/text_output.hpp"
 
 #include <exception>
@@ -10,26 +11,35 @@
 
 namespace {
 
+enum class OutputMode { Source, Tokens, Ast, Classify };
+
 struct Options {
     std::string path;
-    bool show_tokens = false;
-    bool show_ast = false;
+    OutputMode mode = OutputMode::Source;
     bool show_whitespace = false;
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 8\n"
-        << "Usage: bminor [--tokens | --ast] [--show-whitespace] [--] <source-file>\n"
+    out << "B-Minor Front End - Step 9\n"
+        << "Usage: bminor [--tokens | --ast | --classify] [--show-whitespace] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
         << "--tokens: show token kinds, lexemes and source locations.\n"
         << "--ast: parse declarations and show their syntax tree.\n"
-        << "--show-whitespace: include whitespace rows in the token display.\n\n"
+        << "--classify: show source spans with AST-based syntax roles.\n"
+        << "--show-whitespace: include whitespace in token/classification tables.\n\n"
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
-        << "In token/AST mode, errors are reported on stderr; exit code 1.\n"
+        << "Analysis errors are reported on stderr; exit code 1.\n"
         << "AST mode accepts declarations, expressions, function bodies and statements.\n"
         << "Syntax errors use panic-mode recovery; recovered ASTs include error nodes.\n";
+}
+
+void select_mode(Options& options, OutputMode mode) {
+    if (options.mode != OutputMode::Source && options.mode != mode) {
+        throw std::invalid_argument("Choose one output mode.");
+    }
+    options.mode = mode;
 }
 
 Options parse_options(int argc, char* argv[]) {
@@ -42,9 +52,11 @@ Options parse_options(int argc, char* argv[]) {
             // Everything after -- is a path, even if it begins with a dash.
             read_options = false;
         } else if (read_options && argument == "--tokens") {
-            options.show_tokens = true;
+            select_mode(options, OutputMode::Tokens);
         } else if (read_options && argument == "--ast") {
-            options.show_ast = true;
+            select_mode(options, OutputMode::Ast);
+        } else if (read_options && argument == "--classify") {
+            select_mode(options, OutputMode::Classify);
         } else if (read_options && argument == "--show-whitespace") {
             options.show_whitespace = true;
         } else if (read_options && !argument.empty() && argument[0] == '-') {
@@ -60,11 +72,9 @@ Options parse_options(int argc, char* argv[]) {
     if (options.path.empty()) {
         throw std::invalid_argument("Missing source file.");
     }
-    if (options.show_whitespace && !options.show_tokens) {
-        throw std::invalid_argument("--show-whitespace requires --tokens.");
-    }
-    if (options.show_tokens && options.show_ast) {
-        throw std::invalid_argument("Choose either --tokens or --ast.");
+    if (options.show_whitespace && options.mode != OutputMode::Tokens
+        && options.mode != OutputMode::Classify) {
+        throw std::invalid_argument("--show-whitespace requires --tokens or --classify.");
     }
     return options;
 }
@@ -116,6 +126,25 @@ bool print_ast(const bminor::SourceFile& source) {
     return !parsed.has_errors();
 }
 
+bool print_classification(const bminor::SourceFile& source, bool show_whitespace) {
+    const auto result = bminor::classify_source(source);
+    std::cout << "Location\tOffset\tLength\tRole\tError\tLexeme\n";
+    for (const auto& span : result.spans) {
+        if (!show_whitespace && span.role == bminor::SyntaxRole::Whitespace) { continue; }
+        std::cout << span.location.filename << ':' << span.location.line << ':' << span.location.column
+                  << '\t' << span.location.offset << '\t' << span.length << '\t'
+                  << bminor::syntax_role_name(span.role) << '\t'
+                  << (span.has_error ? "yes" : "no") << '\t';
+        // The original source supplies text. Renderers can use the same offsets
+        // without rebuilding code from AST nodes or normalizing whitespace.
+        bminor::write_escaped(std::cout, source.text.substr(span.location.offset, span.length));
+        std::cout << '\n';
+    }
+    std::cout.flush();
+    for (const auto& error : result.diagnostics) { bminor::write_diagnostic(std::cerr, error); }
+    return !result.has_errors();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -127,10 +156,12 @@ int main(int argc, char* argv[]) {
     try {
         const Options options = parse_options(argc, argv);
         const bminor::SourceFile source = bminor::SourceFile::load(options.path);
-        if (options.show_tokens) {
+        if (options.mode == OutputMode::Tokens) {
             return print_tokens(source, options.show_whitespace) ? 0 : 1;
-        } else if (options.show_ast) {
+        } else if (options.mode == OutputMode::Ast) {
             return print_ast(source) ? 0 : 1;
+        } else if (options.mode == OutputMode::Classify) {
+            return print_classification(source, options.show_whitespace) ? 0 : 1;
         } else {
             std::cout << "Loaded: " << source.path << '\n'
                       << "Bytes: " << source.text.size() << '\n'

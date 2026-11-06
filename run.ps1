@@ -2,6 +2,7 @@ param(
     [string]$Source = "examples/hello.bminor",
     [switch]$Tokens,
     [switch]$Ast,
+    [switch]$Classify,
     [switch]$ShowWhitespace
 )
 
@@ -22,6 +23,7 @@ try {
     $programArgs = @()
     if ($Tokens) { $programArgs += "--tokens" }
     if ($Ast) { $programArgs += "--ast" }
+    if ($Classify) { $programArgs += "--classify" }
     if ($ShowWhitespace) { $programArgs += "--show-whitespace" }
     $programArgs += "--"
     $programArgs += $Source

@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 8
+## Current state: step 9
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -26,6 +26,11 @@ declarations, blocks, if/else, for, return, print and expression/empty statement
 Panic-mode syntax recovery now reports multiple errors and retains valid later
 statements/declarations. Discarded regions appear as `ErrorStmt`/`ErrorDecl`;
 unclosed blocks at EOF are marked incomplete. Errors still cause exit code 1.
+
+`--classify` now combines lexical categories with AST-derived identifier roles,
+producing source spans for the upcoming color renderers. Function declarations,
+calls, variable declarations/references and parameter declarations are distinct.
+The table retains comments, exact byte offsets and optional whitespace rows.
 
 ## Build and run on Windows
 
@@ -72,8 +77,26 @@ Program @examples/declarations.bminor:2:1 type=null
 `Type integer` records source syntax; `type=null` is the separate semantic
 annotation reserved for a later project phase. The sample also contains nested
 array initializers and functions with ordinary/unsized-array parameters.
-`-Ast` and `-Tokens` are alternative display modes; whitespace display applies
-only to token mode.
+`-Ast`, `-Tokens` and `-Classify` are alternative display modes. Whitespace
+display applies to token and classification tables.
+
+To inspect the new AST-based source roles:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/classification.bminor -Classify
+```
+
+The same spelling `work` appears as `FUNCTION_DECLARATION`, `FUNCTION_CALL`,
+`VARIABLE_DECLARATION` or `VARIABLE_REFERENCE`, depending on its AST node.
+`(work)(value)` is also recognized as a call. Add `-ShowWhitespace` to include
+spaces and line endings. Each row shows location, offset, length, role, an error
+flag and the original escaped text; this step uses a plain table before adding
+ANSI and HTML colors. See `docs/syntax-classification.md` for all roles and rules.
+
+With syntax errors, classification uses the recovered AST and marks discarded
+regions without losing their base categories. With lexical errors, it returns
+complete lexical fallback spans and leaves uncertain names as `IDENTIFIER`.
+Diagnostics still go to stderr and cause exit code 1 in either case.
 
 To inspect a complete program with function bodies and statements:
 
@@ -179,6 +202,8 @@ cmake --build build
 .\build\bminor.exe --ast examples/expressions.bminor
 .\build\bminor.exe --ast examples/statements.bminor
 .\build\bminor.exe --ast examples/syntax_errors.bminor
+.\build\bminor.exe --classify examples/classification.bminor
+.\build\bminor.exe --classify --show-whitespace examples/classification.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -196,14 +221,14 @@ main: function integer () = {
 ```
 
 Exit codes: `0` for success or help, `1` for file/lexical/parser errors, and `2`
-for incorrect command-line usage. Lexical errors affect token and AST modes;
-parser errors affect AST mode. Byte counts depend on the
-file's line endings. Default source-display mode only reads and shows the file;
+for incorrect command-line usage. Lexical errors affect token, AST and
+classification modes; parser errors affect AST and classification modes.
+Byte counts depend on the file's line endings. Default source-display mode only reads and shows the file;
 it does not perform lexical validation.
 
 ## Code map
 
-- `src/main.cpp`: command-line handling and output.
+- `src/main.cpp`: mutually exclusive output modes, argument handling and display.
 - `include/bminor/source_file.hpp`: source-file data and its public interface.
 - `src/source_file.cpp`: file reading and line counting, including LF and CRLF.
 - `include/bminor/source_location.hpp`: filename and cursor coordinates.
@@ -214,6 +239,8 @@ it does not perform lexical validation.
 - `include/bminor/ast.hpp` and `src/ast.cpp`: owned syntax nodes and tree output.
 - `include/bminor/parser.hpp` and `src/parser.cpp`: declarations, types, expressions and statements.
 - `include/bminor/text_output.hpp` and `src/text_output.cpp`: shared escaped text display.
+- `include/bminor/syntax_classifier.hpp` and `src/syntax_classifier.cpp`: lexical
+  categories, AST-based source roles and independent error decorations.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
   comments, malformed input, positions and complete source coverage.
 - `tests/diagnostic_tests.cpp`: 10 regression groups for error causes, spans,
@@ -231,6 +258,9 @@ it does not perform lexical validation.
 - `tests/recovery_tests.cpp`: 12 groups for continuation, boundaries, spans,
   EOF blocks, resource failures, reuse and deterministic progress checks.
 - `tests/check_recovery_cli.cmake`: multiple diagnostics and a recovered CLI tree.
+- `tests/classifier_tests.cpp`: 12 groups for roles, traversal, AST dependence,
+  error fallback, immutability and complete source coverage.
+- `tests/check_classification_cli.cmake`: classification output modes and error status.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -240,6 +270,7 @@ it does not perform lexical validation.
 - `docs/parser-design.md`: supported syntax, FIRST/FOLLOW decisions, precedence,
   AST ownership and current parser limitations.
 - `docs/error-recovery.md`: panic-mode synchronization, error nodes and progress rules.
+- `docs/syntax-classification.md`: source-span roles and the contract for future renderers.
 
 Source text is retained without newline conversion, since later output must
 preserve its formatting. Generated files stay in `build/` or `output/`.

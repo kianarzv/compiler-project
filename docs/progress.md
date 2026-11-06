@@ -307,4 +307,50 @@ Recovery produces a partial structural view, not a corrected or semantically
 valid program. Lexical errors still prevent AST-mode parser startup, while
 token mode continues to report every lexical error as before.
 
-Next review gate: user approval before step 9 (AST-based syntax classification).
+Step 9 was approved by the user after reviewing syntax recovery.
+
+## Step 9: AST-based source-span classification
+
+Implemented:
+
+- A `SyntaxRole` model and one classified span per non-EOF token, retaining all
+  source coordinates, byte lengths, comments and whitespace.
+- Lexical categories refined by a const AST traversal for function declarations/
+  calls, variable declarations/references and parameter declarations.
+- Exact occurrence matching rather than name-based or next-parenthesis guesses,
+  including grouped callees and composite/indexed callee behavior.
+- Traversal through every expression, type-bound, initializer and statement field.
+- Error decorations independent of base roles, with recovered syntax support and
+  a complete lexical fallback when parser startup is blocked by lexical errors.
+- `--classify` / `run.ps1 -Classify`, optional whitespace rows and a role demo.
+- A single output-mode enum for CLI exclusivity, preparing the later renderers.
+- Updated English comments, a classification guide, 12 classifier groups and
+  a real CLI classification test.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and configured warnings, without warnings.
+- All 13 CTest targets passed: seven unit suites and six CLI checks, including
+  12 classifier groups checking expected roles and source-coverage invariants.
+- Proved that omitting the AST keeps identifiers generic while supplying it
+  distinguishes declaration/call roles; token and AST snapshots were unchanged.
+- Checked repeated spellings, parameter/value roles, local declarations, grouped
+  callees, calls through indexed/call results and every existing AST child field.
+- Checked recovery decorations independently from categories, preserved later
+  valid names, lexical fallback and zero-byte missing-node behavior.
+- Verified exact byte coverage for empty/whitespace/CRLF input and 16 deterministic
+  inputs containing every byte value. No EOF or synthetic spans were added.
+- The maintained sample showed all seven work occurrences with their expected
+  declaration/call/value/local roles; a CRLF copy retained line/column/category
+  results in a path with spaces. Hiding whitespace changed only displayed rows.
+- Reconstructed complete source bytes from CLI offsets/escaped lexemes for
+  maintained programs, the five-error sample and an all-256-bytes file.
+- Checked error exit codes, conflicting output modes, original source display,
+  recovered classification and unchanged token/AST behavior.
+- `run.ps1 -Classify -ShowWhitespace` forwarded both switches, complete output
+  and all five syntax messages with expected exit code 1 for the error example.
+
+Roles describe syntax rather than resolved symbols or types. This step produces
+inspectable spans; ANSI and HTML rendering remain for steps 10 and 11.
+
+Next review gate: user approval before step 10 (ANSI syntax rendering).

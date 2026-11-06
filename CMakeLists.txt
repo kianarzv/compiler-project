@@ -14,6 +14,7 @@ add_library(bminor_core
     src/ast.cpp
     src/parser.cpp
     src/text_output.cpp
+    src/syntax_classifier.cpp
 )
 target_include_directories(bminor_core PUBLIC include)
 
@@ -40,6 +41,9 @@ if(BUILD_TESTING)
     add_executable(recovery_tests tests/recovery_tests.cpp)
     target_link_libraries(recovery_tests PRIVATE bminor_core)
     add_test(NAME recovery_tests COMMAND recovery_tests)
+    add_executable(classifier_tests tests/classifier_tests.cpp)
+    target_link_libraries(classifier_tests PRIVATE bminor_core)
+    add_test(NAME classifier_tests COMMAND classifier_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
@@ -77,11 +81,18 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_recovery_cli.cmake
     )
     set_tests_properties(recovery_tests syntax_recovery_cli PROPERTIES TIMEOUT 30)
+    add_test(NAME syntax_classification_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/classification.bminor
+            -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/syntax_errors.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_classification_cli.cmake
+    )
 endif()
 
 foreach(target IN ITEMS
     bminor_core bminor lexer_tests diagnostic_tests parser_tests
-    expression_tests statement_tests recovery_tests
+    expression_tests statement_tests recovery_tests classifier_tests
 )
     if(NOT TARGET ${target})
         continue()

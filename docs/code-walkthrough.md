@@ -4,7 +4,8 @@
 
 1. `src/main.cpp` checks arguments. With no display option it shows the original
    source, as in step 1. `--tokens` calls `print_tokens()`; `--ast` calls
-   `print_ast()`. The two display modes cannot be combined.
+   `print_ast()`. `--classify` calls `print_classification()`. Analysis modes
+   cannot be combined; the `OutputMode` enum stores the single selected mode.
 2. `SourceFile::load()` opens the file in binary mode and stores its bytes. File
    errors become exceptions and are reported by `main()` with exit code 1.
 3. `Lexer::tokenize()` resets its cursor and diagnostics, then repeatedly calls
@@ -165,3 +166,29 @@ nearest-else association, optional for headers, positions and nesting limits;
 `tests/recovery_tests.cpp` checks synchronization, progress, spans and parser reuse.
 The selected syntax grammar and panic-mode recovery are implemented; semantic
 analysis remains separate and must respect diagnostics in a recovered result.
+
+## Follow a classification run
+
+`print_classification()` calls `classify_source()`. The function first builds
+lexical categories from every non-EOF token. With clean lexing, it parses the
+same tokens and passes the recovered `Program` to `classify_tokens()`.
+Lexical errors instead retain the complete fallback table and diagnostics.
+
+`AstClassifier::visit()` walks the AST without modifying it. Declaration and
+parameter parents mark their identifier leaves; expression names become
+references. A `CallExpr` visits its callee/arguments first, then `mark_callee()`
+overrides a directly named callee as a function call, unwrapping group nodes.
+This ordering prevents the normal identifier visit from erasing the call role.
+Indexed/call-result callees keep their children classified by their own roles.
+
+`mark_name()` finds the exact token span by offset, filename and length using
+binary search. It does not look up a name globally, so repeated spellings and
+shadowing do not contaminate unrelated occurrences. `mark_error()` marks the
+discarded regions represented by error nodes while preserving each base role;
+whitespace and zero-byte missing nodes are not decorated.
+
+The CLI reads each span's text from the original source and escapes it using
+the existing display helper. Future renderers will use the same spans and bytes
+with their own styles. Read `docs/syntax-classification.md` before changing role
+or error precedence; `tests/classifier_tests.cpp` checks expected context and
+that source/AST data remain unchanged.

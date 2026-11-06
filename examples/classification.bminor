@@ -1,0 +1,18 @@
+// Step 9: the same spelling has different roles at different source locations.
+work: function integer (value: integer);
+work: function integer (value: integer) = {
+    return value + 1;
+}
+
+main: function integer () = {
+    value: integer = 3;
+    result: integer = work(value);
+    reference: integer = work;
+    print "work(value) is string text\n", result;
+    result = (work)(value);
+    {
+        work: integer = 7;
+        print work;
+    }
+    return result;
+}

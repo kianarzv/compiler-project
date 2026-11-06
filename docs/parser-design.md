@@ -176,7 +176,7 @@ the token vector. The parser itself does borrow that vector, which must outlive
 the parser. `dump_ast()` is a separate traversal, using shared display escaping
 from `text_output.cpp` rather than teaching parsing routines to print.
 
-## Errors and current limits
+## Errors, recovery and current limits
 
 | Code | Meaning |
 | --- | --- |
@@ -185,16 +185,21 @@ from `text_output.cpp` rather than teaching parsing routines to print.
 | `PAR003` | Active recursive nesting or expression-tree height exceeds the implementation limit of 128. |
 
 An EOF error has a zero-byte span at the cursor after the final byte; other
-errors cover the current token. A private `ParseFailure` signal unwinds the
-incomplete declaration and is caught inside `parse()`. The result contains one
-diagnostic and any top-level declarations completed earlier. An error inside a
-function discards that incomplete function, including its partial body, and
-stops before later declarations. This is controlled failure,
-not panic-mode recovery; continuing after syntax errors is step 8.
+errors cover the current token. A private `ParseFailure` signal unwinds to a
+declaration/statement boundary. Step 8 synchronizes there, records an explicit
+`ErrorDecl` or `ErrorStmt` and continues. Valid function/block contents and later
+declarations remain available. Invalid headers can still discard their whole
+construct; this is recovery, not source repair or successful validation.
+
+`BlockStmt::incomplete` records a block whose closing brace was absent at EOF.
+Missing child statements at an owning else/brace can have zero-byte error spans.
+The missing-closing-brace message is reported once per EOF. Full synchronization,
+progress and delimiter-ownership rules are documented in
+[error-recovery.md](error-recovery.md).
 
 `--ast` first scans the whole file. Lexical errors are returned without starting
 the parser, preventing duplicate syntax messages for invalid tokens. Otherwise
-it prints the complete or partial tree and any parser diagnostic; an error
+it prints the complete or recovered tree and all parser diagnostics; an error
 returns exit code 1. The nesting guard is restored during unwinding, and a
 second `parse()` call resets all cursor/error state.
 

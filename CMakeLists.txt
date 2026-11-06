@@ -37,6 +37,9 @@ if(BUILD_TESTING)
     add_executable(statement_tests tests/statement_tests.cpp)
     target_link_libraries(statement_tests PRIVATE bminor_core)
     add_test(NAME statement_tests COMMAND statement_tests)
+    add_executable(recovery_tests tests/recovery_tests.cpp)
+    target_link_libraries(recovery_tests PRIVATE bminor_core)
+    add_test(NAME recovery_tests COMMAND recovery_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
@@ -67,9 +70,19 @@ if(BUILD_TESTING)
             -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/statement_error.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_statement_cli.cmake
     )
+    add_test(NAME syntax_recovery_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/syntax_errors.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_recovery_cli.cmake
+    )
+    set_tests_properties(recovery_tests syntax_recovery_cli PROPERTIES TIMEOUT 30)
 endif()
 
-foreach(target bminor_core bminor lexer_tests diagnostic_tests parser_tests expression_tests statement_tests)
+foreach(target IN ITEMS
+    bminor_core bminor lexer_tests diagnostic_tests parser_tests
+    expression_tests statement_tests recovery_tests
+)
     if(NOT TARGET ${target})
         continue()
     endif()

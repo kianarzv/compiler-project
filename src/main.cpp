@@ -18,7 +18,7 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 7\n"
+    out << "B-Minor Front End - Step 8\n"
         << "Usage: bminor [--tokens | --ast] [--show-whitespace] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
@@ -29,7 +29,7 @@ void print_usage(std::ostream& out) {
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
         << "In token/AST mode, errors are reported on stderr; exit code 1.\n"
         << "AST mode accepts declarations, expressions, function bodies and statements.\n"
-        << "Syntax parsing stops at its first error; recovery arrives in step 8.\n";
+        << "Syntax errors use panic-mode recovery; recovered ASTs include error nodes.\n";
 }
 
 Options parse_options(int argc, char* argv[]) {

@@ -1,0 +1,11 @@
+broken integer;
+version: integer = 1;
+main: function integer () = {
+    value: integer = ;
+    print "after the declaration\n";
+    if (true) print "missing semicolon" else print "else survives\n";
+    for (value = 0 value < 3; value++) { print "discarded malformed loop\n"; }
+    print sum(1, );
+    return 0;
+}
+after: integer = 42;

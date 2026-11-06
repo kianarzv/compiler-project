@@ -19,7 +19,7 @@ enum class NodeKind {
     Program, VarDecl, FuncDecl, ParamDecl, Identifier, TypeSyntax,
     LiteralExpr, ArrayInitExpr, IdentifierExpr, UnaryExpr, BinaryExpr,
     GroupExpr, CallExpr, IndexExpr, PostfixExpr, BlockStmt, DeclStmt,
-    ExprStmt, IfStmt, ForStmt, ReturnStmt, PrintStmt
+    ExprStmt, IfStmt, ForStmt, ReturnStmt, PrintStmt, ErrorDecl, ErrorStmt
 };
 
 struct AstNode {
@@ -128,6 +128,13 @@ struct VarDecl final : Decl {
     std::unique_ptr<Expr> initializer;
 };
 
+// Recovery keeps an explicit source span instead of pretending discarded input
+// was a successfully parsed declaration. Its diagnostic is in ParseResult.
+struct ErrorDecl final : Decl {
+    ErrorDecl(const SourceLocation& location, std::size_t length);
+    std::size_t length;
+};
+
 struct ParamDecl final : AstNode {
     explicit ParamDecl(const SourceLocation& location);
     std::unique_ptr<Identifier> name;
@@ -141,6 +148,15 @@ struct Stmt : AstNode {
 struct BlockStmt final : Stmt {
     explicit BlockStmt(const SourceLocation& location);
     std::vector<std::unique_ptr<Stmt>> statements;
+    // EOF can end a recovered block without a real closing brace. Keep that
+    // distinction visible; no closing token is fabricated during recovery.
+    bool incomplete = false;
+};
+
+struct ErrorStmt final : Stmt {
+    ErrorStmt(const SourceLocation& location, std::size_t length);
+    // Zero is possible for a missing branch/body at its owner's else or '}'.
+    std::size_t length;
 };
 
 // A declaration remains a declaration node; this wrapper places it in a

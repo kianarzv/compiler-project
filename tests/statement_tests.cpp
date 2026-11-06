@@ -210,9 +210,14 @@ void failed_body_and_repeat_parse() {
     const auto second = parser.parse();
     for (const auto* result : {&first, &second}) {
         require(result->has_errors() && result->diagnostics.size() == 1
-                    && result->program->declarations.size() == 1
-                    && result->program->declarations[0]->kind == NodeKind::VarDecl,
-                "Failed body was retained, or parsing continued/accumulated errors.");
+                    && result->program->declarations.size() == 3
+                    && result->program->declarations[0]->kind == NodeKind::VarDecl
+                    && result->program->declarations[1]->kind == NodeKind::FuncDecl
+                    && result->program->declarations[2]->kind == NodeKind::VarDecl,
+                "Recovered function/later declaration was lost or errors accumulated.");
+        const auto& recovered = static_cast<const bminor::FuncDecl&>(*result->program->declarations[1]);
+        require(recovered.body && recovered.body->statements[0]->kind == NodeKind::ErrorStmt,
+                "Failed return statement must have an explicit error placeholder.");
     }
 }
 

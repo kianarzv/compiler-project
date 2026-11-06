@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 7
+## Current state: step 8
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -23,8 +23,9 @@ operators, assignment, unary minus/not, groups, calls, indexing and postfix
 increment/decrement. Array sizes also accept expressions. The AST retains source
 locations and null semantic-type annotations. Function bodies support local
 declarations, blocks, if/else, for, return, print and expression/empty statements.
-Syntax parsing currently stops after its first error, retaining completed
-top-level declarations; panic-mode recovery arrives in step 8.
+Panic-mode syntax recovery now reports multiple errors and retains valid later
+statements/declarations. Discarded regions appear as `ErrorStmt`/`ErrorDecl`;
+unclosed blocks at EOF are marked incomplete. Errors still cause exit code 1.
 
 ## Build and run on Windows
 
@@ -105,18 +106,32 @@ The sample demonstrates syntax; name binding, assignment-target validity and
 constant/type checks belong to later semantic analysis.
 
 For a malformed call, run `-Source examples/expression_error.bminor -Ast`.
-It reports `PAR001` at the missing argument's closing parenthesis and retains
-the completed `ready` declaration. `PAR003` reports excessive recursive nesting
+It reports `PAR001` at the missing argument's closing parenthesis, records an
+`ErrorDecl`, and keeps both surrounding declarations. `PAR003` reports excessive recursive nesting
 or expression-tree height; the current implementation limit is 128.
 
 For a partial AST and a syntax diagnostic, use
 `-Source examples/declaration_error.bminor -Ast`. It retains `ready`, reports
-`PAR001` for the missing colon, and stops before `unreached`.
+`PAR001` for the missing colon, adds an `ErrorDecl`, and continues to `unreached`.
 
 For an error inside a function, use `-Source examples/statement_error.bminor -Ast`.
 The missing semicolon after `return 0` is reported at line 5, column 1. The
-earlier global `version` declaration remains in the tree; the incomplete
-function and later declarations are omitted until syntax recovery is added.
+earlier global `version`, the function and its valid earlier print, and the
+later global declaration remain in the tree. An `ErrorStmt` replaces the
+unfinished return.
+
+To inspect multiple independent syntax errors in one run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/syntax_errors.bminor -Ast
+```
+
+This sample intentionally reports **five errors**. The tree still contains the
+surviving else branch, final return and global `after`. The malformed loop is
+one discarded region, with its header/body represented by an error node. Exit
+code 1 is expected. Error-node byte lengths include discarded source/trivia;
+missing children may have a zero-length placeholder at an owning else/brace.
+See `docs/error-recovery.md` for synchronization rules and recovery limits.
 
 Add `-ShowWhitespace` to include escaped spaces and line endings in the table.
 Comments are shown even when whitespace is hidden. To compare with step 2,
@@ -163,6 +178,7 @@ cmake --build build
 .\build\bminor.exe --ast examples/declarations.bminor
 .\build\bminor.exe --ast examples/expressions.bminor
 .\build\bminor.exe --ast examples/statements.bminor
+.\build\bminor.exe --ast examples/syntax_errors.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -212,6 +228,9 @@ it does not perform lexical validation.
 - `tests/statement_tests.cpp`: 12 groups for bodies, local declarations, nearest
   else, optional for headers, locations, errors and bounded statement nesting.
 - `tests/check_statement_cli.cmake`: complete programs and failed-function output.
+- `tests/recovery_tests.cpp`: 12 groups for continuation, boundaries, spans,
+  EOF blocks, resource failures, reuse and deterministic progress checks.
+- `tests/check_recovery_cli.cmake`: multiple diagnostics and a recovered CLI tree.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -220,6 +239,7 @@ it does not perform lexical validation.
 - `docs/grammar.ebnf`: the implemented B-Minor syntax grammar.
 - `docs/parser-design.md`: supported syntax, FIRST/FOLLOW decisions, precedence,
   AST ownership and current parser limitations.
+- `docs/error-recovery.md`: panic-mode synchronization, error nodes and progress rules.
 
 Source text is retained without newline conversion, since later output must
 preserve its formatting. Generated files stay in `build/` or `output/`.

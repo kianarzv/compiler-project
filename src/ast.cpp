@@ -54,9 +54,13 @@ TypeSyntax::TypeSyntax(TypeKind type_kind, const SourceLocation& location)
     : AstNode(NodeKind::TypeSyntax, location), type_kind(type_kind) {}
 Decl::Decl(NodeKind kind, const SourceLocation& location) : AstNode(kind, location) {}
 VarDecl::VarDecl(const SourceLocation& location) : Decl(NodeKind::VarDecl, location) {}
+ErrorDecl::ErrorDecl(const SourceLocation& location, std::size_t length)
+    : Decl(NodeKind::ErrorDecl, location), length(length) {}
 ParamDecl::ParamDecl(const SourceLocation& location) : AstNode(NodeKind::ParamDecl, location) {}
 Stmt::Stmt(NodeKind kind, const SourceLocation& location) : AstNode(kind, location) {}
 BlockStmt::BlockStmt(const SourceLocation& location) : Stmt(NodeKind::BlockStmt, location) {}
+ErrorStmt::ErrorStmt(const SourceLocation& location, std::size_t length)
+    : Stmt(NodeKind::ErrorStmt, location), length(length) {}
 DeclStmt::DeclStmt(const SourceLocation& location) : Stmt(NodeKind::DeclStmt, location) {}
 ExprStmt::ExprStmt(const SourceLocation& location) : Stmt(NodeKind::ExprStmt, location) {}
 IfStmt::IfStmt(const SourceLocation& location) : Stmt(NodeKind::IfStmt, location) {}
@@ -129,7 +133,15 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
     case NodeKind::GroupExpr: out << "GroupExpr"; break;
     case NodeKind::CallExpr:  out << "CallExpr"; break;
     case NodeKind::IndexExpr: out << "IndexExpr"; break;
-    case NodeKind::BlockStmt: out << "BlockStmt"; break;
+    case NodeKind::BlockStmt:
+        out << (static_cast<const BlockStmt&>(node).incomplete ? "BlockStmt incomplete" : "BlockStmt");
+        break;
+    case NodeKind::ErrorDecl:
+        out << "ErrorDecl bytes=" << static_cast<const ErrorDecl&>(node).length;
+        break;
+    case NodeKind::ErrorStmt:
+        out << "ErrorStmt bytes=" << static_cast<const ErrorStmt&>(node).length;
+        break;
     case NodeKind::DeclStmt:  out << "DeclStmt"; break;
     case NodeKind::ExprStmt:
         out << (static_cast<const ExprStmt&>(node).expression ? "ExprStmt" : "ExprStmt empty");
@@ -206,6 +218,8 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
     case NodeKind::Identifier:
     case NodeKind::LiteralExpr:
     case NodeKind::IdentifierExpr:
+    case NodeKind::ErrorDecl:
+    case NodeKind::ErrorStmt:
         break;
     case NodeKind::UnaryExpr:
         dump_node(out, *static_cast<const UnaryExpr&>(node).operand, depth + 1);

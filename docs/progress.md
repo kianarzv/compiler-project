@@ -262,4 +262,49 @@ The selected syntax grammar is implemented. Syntax recovery remains for step 8,
 and semantic checks remain for later project phases. A body error currently
 discards the incomplete function and stops before later top-level declarations.
 
-Next review gate: user approval before step 8 (panic-mode syntax recovery).
+Step 8 was approved by the user after reviewing function/statement parsing.
+
+## Step 8: panic-mode syntax recovery
+
+Implemented:
+
+- Recovery at top-level declaration, block statement and nested child-body boundaries.
+- Delimiter-aware synchronization using the already-consumed construct prefix,
+  with semicolon, declaration/statement starts, owning else/brace and EOF rules.
+- Explicit `ErrorDecl`/`ErrorStmt` source spans rather than silently dropping
+  malformed regions or constructing fake valid expressions.
+- Preservation of valid earlier/later statements, surrounding functions and
+  later globals, including recovery after malformed control headers.
+- Unfinished-block markers at EOF with one missing-brace message per parse.
+- Retained nesting limits and error exit status; valid input behavior is unchanged.
+- A five-error example, a dedicated recovery guide and updated English comments.
+- Twelve recovery groups and a CLI test, with prior error-expectation tests
+  updated to require later-node preservation instead of first-error stopping.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and configured warning flags, without warnings.
+- All 11 CTest targets passed: six unit suites and five CLI checks, including
+  12 new recovery groups. Earlier error tests now verify continuation explicitly.
+- The new sample reports five PAR001 diagnostics, with one ErrorDecl and four
+  ErrorStmt markers, while preserving the else branch, final return and global after.
+- Checked global/local synchronization, missing semicolons, malformed control
+  headers, parameter/body isolation, broken call/initializer delimiters and
+  zero-byte missing children at owning else/brace boundaries.
+- Checked unfinished nested blocks at EOF, deduplicated missing-brace reporting,
+  repeated parsing state reset, resource-error recovery and continued progress.
+- Ran 64 deterministic streams of 80 lexically valid tokens twice each, verifying
+  bounded diagnostics, monotonic source spans and repeatable printable trees.
+- A CRLF copy in a path with spaces retained the same diagnostic lines/columns
+  and tree structure; error-span byte lengths correctly included the extra CRs.
+- All five maintained valid syntax samples still produced clean trees. The three
+  older parser-error examples now retained their following declarations.
+- Confirmed lexical-error gating, source display and exact token reconstruction.
+- `run.ps1 -Ast` forwarded the recovered tree, all five messages and expected
+  exit code 1 without shell error wrappers.
+
+Recovery produces a partial structural view, not a corrected or semantically
+valid program. Lexical errors still prevent AST-mode parser startup, while
+token mode continues to report every lexical error as before.
+
+Next review gate: user approval before step 9 (AST-based syntax classification).

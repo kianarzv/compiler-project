@@ -22,8 +22,8 @@ struct ParseResult {
 class Parser {
 public:
     explicit Parser(const std::vector<Token>& tokens);
-    // Stops at the first syntax error and retains completed declarations.
-    // Panic-mode recovery across syntax errors is scheduled for step 8.
+    // Panic-mode recovery retains valid nodes and explicit error spans, while
+    // collecting diagnostics instead of stopping after the first syntax error.
     ParseResult parse();
 
 private:
@@ -37,6 +37,8 @@ private:
     [[noreturn]] void fail(DiagnosticCode code, const std::string& message);
     void check_nesting();
     void check_expression_depth(const Expr& expression);
+    void synchronize(std::size_t start, bool at_program_scope, bool preserve_else);
+    std::unique_ptr<Stmt> parse_recovering_statement(bool preserve_else = false);
 
     std::unique_ptr<Decl> parse_declaration();
     std::unique_ptr<VarDecl> parse_variable_declaration(const Token& name);
@@ -73,6 +75,7 @@ private:
     std::size_t position_ = 0;
     std::size_t nesting_ = 0;
     std::vector<Diagnostic> diagnostics_;
+    bool reported_unclosed_block_ = false;
 };
 
 } // namespace bminor

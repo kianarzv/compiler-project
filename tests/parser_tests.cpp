@@ -135,9 +135,11 @@ void partial_tree_and_eof_errors() {
     const std::string text = "ok: integer; bad integer; later: boolean;";
     const auto result = parse(text);
     require(result.has_errors() && result.diagnostics.size() == 1
-                && result.program->declarations.size() == 1,
-            "Parser should retain completed declarations and stop at its first error.");
+                && result.program->declarations.size() == 3,
+            "Parser should retain declarations before and after a malformed one.");
     require(variable(result, 0).name->name == "ok", "Completed declaration was lost.");
+    require(result.program->declarations[1]->kind == NodeKind::ErrorDecl
+                && variable(result, 2).name->name == "later", "Declaration recovery failed.");
     require(result.diagnostics[0].code == DiagnosticCode::UnexpectedToken
                 && result.diagnostics[0].location.offset == text.find("integer", 13),
             "Missing colon diagnostic points to the wrong token.");

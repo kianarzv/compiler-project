@@ -135,11 +135,20 @@ children. The parser checks this after construction, including left-associated
 and postfix chains built by loops. A separate nesting guard limits actual
 recursive parsing. Both protect the later AST printer and automatic cleanup.
 
-An error creates a structured parser diagnostic and throws a private
-`ParseFailure` signal. `parse()` catches it, automatically destroys the
-incomplete top-level declaration, and returns any complete earlier declarations.
-For an error in a function body, that whole incomplete function is destroyed;
-later declarations are not parsed yet. Panic-mode recovery comes in step 8.
+An error creates a structured diagnostic and throws a private `ParseFailure`
+signal. `parse()` catches declaration failures, while
+`parse_recovering_statement()` catches statement/child-body failures. The local
+incomplete node is destroyed, `synchronize()` skips to a safe boundary, and an
+`ErrorDecl`/`ErrorStmt` records the discarded span. Parent blocks/functions and
+valid later nodes survive. `parse_if()` and `parse_for()` use the child wrapper
+so an errored branch need not discard its surrounding control structure.
+
+`synchronize()` rebuilds delimiter counts from the construct's saved start,
+which keeps for-header semicolons from looking like statement endings. It leaves
+an owning brace/else for its parent and consumes stray tokens to ensure progress.
+At EOF a block can return with `incomplete=true`, preserving known contents and
+reporting the missing closing brace once. See `docs/error-recovery.md` for the
+rules and limits; the AST printer exposes all error markers.
 
 `ParseResult` owns the `Program` and diagnostics. Nodes own their children with
 `unique_ptr`; no AST data depends on the input vector's lifetime. All node
@@ -153,5 +162,6 @@ Document grammar choices in `docs/parser-design.md` and test tree shape as well
 as successful parsing. `tests/statement_tests.cpp` covers statement structure,
 nearest-else association, optional for headers, positions and nesting limits;
 `tests/check_statement_cli.cmake` exercises full program files and failed bodies.
-The selected syntax grammar is now implemented, with syntax recovery and
-semantic analysis still treated as separate work.
+`tests/recovery_tests.cpp` checks synchronization, progress, spans and parser reuse.
+The selected syntax grammar and panic-mode recovery are implemented; semantic
+analysis remains separate and must respect diagnostics in a recovered result.

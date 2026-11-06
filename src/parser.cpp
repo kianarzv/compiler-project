@@ -7,8 +7,8 @@
 namespace bminor {
 namespace {
 
-// A private control-flow signal unwinds a failed declaration. It is always
-// caught by parse(); malformed source is returned as diagnostics to the caller.
+// A private signal unwinds to the closest statement/declaration recovery point.
+// It never escapes parse(); malformed source is returned as diagnostics.
 struct ParseFailure {};
 
 const std::size_t max_parser_depth = 128;
@@ -31,6 +31,34 @@ bool is_trivia(TokenKind kind) {
         || kind == TokenKind::BlockComment;
 }
 
+struct DelimiterBalance {
+    std::size_t braces = 0;
+    std::size_t parentheses = 0;
+    std::size_t brackets = 0;
+
+    void observe(TokenKind kind) {
+        switch (kind) {
+        case TokenKind::LeftBrace:
+            // A brace group provides a useful boundary even after a broken
+            // header whose ')' or ']' never appeared.
+            if (braces == 0) { parentheses = 0; brackets = 0; }
+            ++braces;
+            break;
+        case TokenKind::RightBrace: if (braces > 0) { --braces; } break;
+        case TokenKind::LeftParen: ++parentheses; break;
+        case TokenKind::RightParen: if (parentheses > 0) { --parentheses; } break;
+        case TokenKind::LeftBracket: ++brackets; break;
+        case TokenKind::RightBracket: if (brackets > 0) { --brackets; } break;
+        default: break;
+        }
+    }
+};
+
+bool starts_statement_keyword(TokenKind kind) {
+    return kind == TokenKind::KwIf || kind == TokenKind::KwFor
+        || kind == TokenKind::KwReturn || kind == TokenKind::KwPrint;
+}
+
 } // namespace
 
 Parser::Parser(const std::vector<Token>& tokens) : tokens_(tokens) {
@@ -43,18 +71,104 @@ ParseResult Parser::parse() {
     position_ = 0;
     nesting_ = 0;
     diagnostics_.clear();
+    reported_unclosed_block_ = false;
     skip_trivia();
     std::unique_ptr<Program> program(new Program(current().location));
-    try {
-        while (!check(TokenKind::EndOfFile)) {
+    while (!check(TokenKind::EndOfFile)) {
+        const std::size_t start = position_;
+        const SourceLocation location = current().location;
+        try {
             program->declarations.push_back(parse_declaration());
+        } catch (const ParseFailure&) {
+            synchronize(start, true, false);
+            program->declarations.emplace_back(new ErrorDecl(
+                location, current().location.offset - location.offset));
         }
-    } catch (const ParseFailure&) {
-        // The incomplete declaration was locally owned and is destroyed here.
-        // Completed declarations remain available without pretending the whole
-        // input was accepted. Recovery to later declarations is added in step 8.
     }
     return ParseResult{std::move(program), std::move(diagnostics_)};
+}
+
+void Parser::synchronize(std::size_t start, bool at_program_scope, bool preserve_else) {
+    // Include delimiters consumed before failure. Otherwise a semicolon inside
+    // a malformed for header, or a parameter's name/colon, looks like a boundary.
+    DelimiterBalance balance;
+    const TokenKind first = tokens_[start].kind;
+    bool compound = first == TokenKind::KwIf || first == TokenKind::KwFor
+        || first == TokenKind::KwWhile || first == TokenKind::KwElse
+        || first == TokenKind::LeftBrace;
+    for (std::size_t i = start; i < position_; ++i) {
+        balance.observe(tokens_[i].kind);
+        compound = compound || tokens_[i].kind == TokenKind::KwFunction;
+    }
+
+    while (!check(TokenKind::EndOfFile)) {
+        const TokenKind kind = current().kind;
+        if (!at_program_scope && kind == TokenKind::RightBrace && balance.braces == 0) {
+            return; // The enclosing block owns this brace, even with a broken header.
+        }
+        if (!at_program_scope && preserve_else && kind == TokenKind::KwElse
+            && balance.braces == 0) {
+            return; // An if routine, not a failed child statement, owns this else.
+        }
+
+        const bool progressed = position_ > start;
+        const bool declaration_start = kind == TokenKind::Identifier
+            && lookahead(1).kind == TokenKind::Colon;
+        if (progressed) {
+            if (at_program_scope && balance.braces == 0
+                && balance.parentheses == 0 && balance.brackets == 0
+                && declaration_start) {
+                return;
+            }
+            if (!at_program_scope && !compound
+                && (declaration_start || starts_statement_keyword(kind)
+                    || (balance.braces == 0 && kind == TokenKind::LeftBrace))) {
+                return;
+            }
+        }
+
+        if (kind == TokenKind::KwFunction) { compound = true; }
+        if (kind == TokenKind::Semicolon
+            && (at_program_scope ? (!compound || balance.braces == 0)
+                                 : (!compound || (balance.braces == 0
+                                                  && balance.parentheses == 0)))) {
+            advance();
+            if (!at_program_scope && first == TokenKind::KwIf && match(TokenKind::KwElse)) {
+                continue; // Discard the malformed if's else body as part of that construct.
+            }
+            return;
+        }
+
+        const bool closes_group = kind == TokenKind::RightBrace && balance.braces == 1;
+        if (at_program_scope && kind == TokenKind::RightBrace && balance.braces == 0) {
+            advance(); // No enclosing block owns a stray program-scope brace.
+            return;
+        }
+        balance.observe(kind);
+        advance();
+        if (closes_group && compound) {
+            if (at_program_scope) {
+                match(TokenKind::Semicolon);
+            } else if (first == TokenKind::KwIf && match(TokenKind::KwElse)) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+std::unique_ptr<Stmt> Parser::parse_recovering_statement(bool preserve_else) {
+    const std::size_t start = position_;
+    const SourceLocation location = current().location;
+    try {
+        return parse_statement();
+    } catch (const ParseFailure&) {
+        synchronize(start, false, preserve_else);
+        // A zero-byte placeholder can represent a missing child before else/'}'.
+        // Its parent has already advanced and will consume that boundary token.
+        return std::unique_ptr<Stmt>(new ErrorStmt(
+            location, current().location.offset - location.offset));
+    }
 }
 
 const Token& Parser::current() const { return tokens_[position_]; }
@@ -374,9 +488,20 @@ std::unique_ptr<BlockStmt> Parser::parse_block() {
     const Token opening = expect(TokenKind::LeftBrace, "Expected '{' before the function or block body.");
     std::unique_ptr<BlockStmt> block(new BlockStmt(opening.location));
     while (!check(TokenKind::RightBrace) && !check(TokenKind::EndOfFile)) {
-        block->statements.push_back(parse_statement());
+        block->statements.push_back(parse_recovering_statement());
     }
-    expect(TokenKind::RightBrace, "Expected '}' after the block body.");
+    if (!match(TokenKind::RightBrace)) {
+        block->incomplete = true;
+        if (!reported_unclosed_block_) {
+            // Report missing closing braces at EOF once, even if several nested
+            // blocks are unfinished. Keep their known contents and mark them.
+            diagnostics_.push_back(Diagnostic{DiagnosticCode::UnexpectedToken,
+                current().location, 0, "Expected '}' before end of file; block opened at line "
+                + std::to_string(opening.location.line) + ", column "
+                + std::to_string(opening.location.column) + "."});
+            reported_unclosed_block_ = true;
+        }
+    }
     return block;
 }
 
@@ -417,10 +542,10 @@ std::unique_ptr<Stmt> Parser::parse_if() {
     expect(TokenKind::LeftParen, "Expected '(' after 'if'.");
     statement->condition = parse_expression();
     expect(TokenKind::RightParen, "Expected ')' after the if condition.");
-    statement->then_branch = parse_statement();
+    statement->then_branch = parse_recovering_statement(true);
     // The nested statement consumes its own available else before returning.
     // This makes an else bind to the nearest unmatched if without backtracking.
-    if (match(TokenKind::KwElse)) { statement->else_branch = parse_statement(); }
+    if (match(TokenKind::KwElse)) { statement->else_branch = parse_recovering_statement(true); }
     return std::unique_ptr<Stmt>(statement.release());
 }
 
@@ -434,7 +559,7 @@ std::unique_ptr<Stmt> Parser::parse_for() {
     expect(TokenKind::Semicolon, "Expected ';' after the for condition.");
     if (!check(TokenKind::RightParen)) { statement->update = parse_expression(); }
     expect(TokenKind::RightParen, "Expected ')' after the for update.");
-    statement->body = parse_statement();
+    statement->body = parse_recovering_statement(true);
     return std::unique_ptr<Stmt>(statement.release());
 }
 

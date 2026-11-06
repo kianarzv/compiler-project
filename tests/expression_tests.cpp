@@ -188,7 +188,8 @@ void malformed_expressions() {
         const auto parsed = parse_source("result: integer = " + text + ";");
         require(parsed.has_errors() && parsed.diagnostics.size() == 1
                     && parsed.diagnostics[0].code == DiagnosticCode::UnexpectedToken
-                    && parsed.program->declarations.empty(),
+                    && parsed.program->declarations.size() == 1
+                    && parsed.program->declarations[0]->kind == NodeKind::ErrorDecl,
                 "Malformed expression was accepted: " + text);
     }
     const std::string eof_text = "result: integer = 1+";

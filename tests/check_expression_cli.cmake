@@ -22,7 +22,7 @@ execute_process(
     ERROR_VARIABLE error_output
 )
 if(NOT error_exit STREQUAL "1" OR NOT partial_ast MATCHES "Identifier \"ready\""
-   OR partial_ast MATCHES "unreached"
+   OR NOT partial_ast MATCHES "unreached" OR NOT partial_ast MATCHES "ErrorDecl"
    OR NOT error_output MATCHES "expression_error.bminor:2:26: error \\[PAR001\\]")
     message(FATAL_ERROR "Malformed-call diagnostics or partial AST are incorrect: ${error_output}")
 endif()

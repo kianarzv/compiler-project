@@ -21,8 +21,8 @@ foreach(source "${SOURCE}" "${HELLO}" "${LEXER_SAMPLE}")
     endif()
 endforeach()
 
-# Before step 8, the first error discards the incomplete function but retains
-# complete top-level declarations before it. The CLI must still return 1.
+# Keep the function, its error placeholder and later declaration, while return 1
+# still tells the caller that this is a recovered tree rather than valid input.
 execute_process(
     COMMAND "${PROGRAM}" --ast "${ERROR_SOURCE}"
     RESULT_VARIABLE error_exit
@@ -30,7 +30,8 @@ execute_process(
     ERROR_VARIABLE error_output
 )
 if(NOT error_exit STREQUAL "1" OR NOT partial_ast MATCHES "Identifier \"version\""
-   OR partial_ast MATCHES "FuncDecl definition" OR partial_ast MATCHES "Identifier \"later\""
+   OR NOT partial_ast MATCHES "FuncDecl definition"
+   OR NOT partial_ast MATCHES "Identifier \"later\"" OR NOT partial_ast MATCHES "ErrorStmt"
    OR NOT error_output MATCHES "statement_error.bminor:5:1: error \\[PAR001\\]")
     message(FATAL_ERROR "Failed-body diagnostics or partial AST are incorrect: ${error_output}")
 endif()

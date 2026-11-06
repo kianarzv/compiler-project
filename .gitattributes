@@ -4,4 +4,5 @@
 *.md text eol=lf
 *.ps1 text eol=lf
 *.bminor text eol=lf
+*.cmake text eol=lf
 CMakeLists.txt text eol=lf

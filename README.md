@@ -3,14 +3,28 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 11
+## Phase one complete: all 12 steps
+
+Run the complete Release build and verification:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\verify.ps1
+```
+
+Expected: all 18 CTest targets pass. The pipeline matrix covers 19 inputs in
+six modes (114 CLI runs) and saves a review table, diagnostics and previews in
+`build/verify/phase1-review/`. Open its `summary.md` or the
+`html_preview/highlighted.html` page to inspect the result.
+See [docs/submission-guide.md](docs/submission-guide.md) for the final snapshot,
+requirement map and demonstration, and [docs/testing.md](docs/testing.md) for
+reproducible checks. The completed Git snapshot is tagged `phase1-final`.
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
 Tokens retain their exact text, filename, line, column and byte offset. Source
 display from step 1 still works.
 
-Use `examples/lexer_full.bminor` for the new complete-program sample, or
+Use `examples/lexer_full.bminor` for a complete-program sample, or
 `examples/tokens_basic.bminor` for the earlier word-boundary demonstration.
 Malformed literals, unfinished block comments, overlong words/strings and
 unknown bytes produce `INVALID` rows and structured diagnostics. Scanning
@@ -88,7 +102,7 @@ array initializers and functions with ordinary/unsized-array parameters.
 `-Ast`, `-Tokens`, `-Classify`, `-Ansi` and `-Html` are alternative modes. Whitespace
 display applies to token and classification tables.
 
-To inspect the new AST-based source roles:
+To inspect the AST-based source roles:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/classification.bminor -Classify
@@ -157,7 +171,7 @@ The earlier `hello.bminor` and `lexer_full.bminor` samples now work with `-Ast`
 too. This tool displays the program structure; semantic analysis and execution
 are separate from this phase-one parser.
 
-To inspect the new expression trees:
+To inspect expression trees:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/expressions.bminor -Ast
@@ -250,7 +264,7 @@ cmake --build build
 .\build\bminor.exe --ansi examples/syntax_errors.bminor
 New-Item -ItemType Directory -Force output | Out-Null
 .\build\bminor.exe --html --output output/highlight.html examples/html_preview.bminor
-ctest --test-dir build --output-on-failure
+cmake -E chdir build ctest --output-on-failure
 ```
 
 Expected output for the sample file:
@@ -323,6 +337,9 @@ it does not perform lexical validation.
   formatting, Unicode/invalid bytes, error classes and stream/span failures.
 - `tests/check_html_cli.cmake`: saved/stdout HTML, recovery, status, source
   protection, output failures and invalid option combinations.
+- `tests/check_pipeline_cli.cmake`: all modes against 19 maintained/generated
+  inputs, exact renderer source coverage and retained review artifacts.
+- `verify.ps1`: separate Release configuration, build, CTest and review paths.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
@@ -335,6 +352,9 @@ it does not perform lexical validation.
 - `docs/syntax-classification.md`: source-span roles and the shared renderer contract.
 - `docs/ansi-rendering.md`: terminal rendering, palette, stream contract and usage.
 - `docs/html-rendering.md`: standalone browser export, classes, escaping and usage.
+- `docs/testing.md`: full check command, regression scope and artifact locations.
+- `docs/submission-guide.md`: architecture, requirement evidence, demonstration,
+  source archive and the boundary for later phases.
 
 Source loading and ANSI output retain original bytes and line endings.
 HTML preserves text formatting with character references and a documented

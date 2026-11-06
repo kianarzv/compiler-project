@@ -114,6 +114,13 @@ if(BUILD_TESTING)
             -DLEXICAL_ERRORS=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexical_errors.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_html_cli.cmake
     )
+    add_test(NAME phase1_pipeline_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DEXAMPLES=${CMAKE_CURRENT_SOURCE_DIR}/examples
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_pipeline_cli.cmake
+    )
+    set_tests_properties(phase1_pipeline_cli PROPERTIES TIMEOUT 120)
 endif()
 
 foreach(target IN ITEMS

@@ -1,5 +1,10 @@
 # Phase-one roadmap
 
+Status: all 12 steps are complete for the approved base dialect. The final
+snapshot is `phase1-final`; use `verify.ps1` to reproduce the checks and inspect
+the pipeline report. See `submission-guide.md` for the handoff. Later compiler
+phases begin only after a new user request.
+
 Each step ends with a runnable result, validation, and a descriptive Git commit
 pushed to the same private repository. Work on the next step starts after the
 user reviews and approves the completed step. Commits reflect actual work as it

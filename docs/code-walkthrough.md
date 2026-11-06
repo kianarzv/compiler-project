@@ -257,3 +257,25 @@ The HTML guide explains the formatting/byte-display contract; the unit and CLI
 suites check escaping, AST classes, output failures and recovered exports.
 `run.ps1 -Html` creates the destination's parent, then lets the C++ executable
 save the document directly instead of piping HTML through PowerShell encoding.
+
+## Follow the final verification
+
+`verify.ps1` uses a separate Release build with `BUILD_TESTING=ON`, builds the
+executable/unit suites, then runs CTest from that build directory. It stops on
+the first failed command and restores the caller's working directory. On success
+it prints the retained review report and browser-preview paths.
+
+`tests/check_pipeline_cli.cmake` copies each example into its own artifact
+directory and runs every CLI mode against that same input. Generated cases add
+formatting/path boundaries, depth-limit recovery and a shallow wide program.
+`check_case()` owns captures, expected statuses and diagnostic comparisons.
+`expected_html_text()` derives expected escaped text from original hex bytes,
+avoiding newline normalization by the test runner. ANSI comparisons also use
+hex bytes; stripping HTML span wrappers must leave exactly the expected text.
+
+Each matrix process has a timeout. A report is rebuilt on every run, with a final
+PASS marker only after all 19 cases/114 processes pass. Expected sample errors
+are asserted rather than ignored. The matrix complements focused unit tests;
+add semantic checks as new suites without changing syntax-only expectations.
+See `testing.md` for exact coverage and `submission-guide.md` for the final
+architecture, requirement map and review sequence.

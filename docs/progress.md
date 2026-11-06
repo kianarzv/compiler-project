@@ -437,4 +437,44 @@ The compiler and maintained CTest suites do not depend on browser tooling.
 HTML uses a documented display fallback for bytes that cannot be represented
 faithfully as ordinary browser text; original source coordinates stay unchanged.
 
-Next review gate: user approval before step 12 (end-to-end checks and submission documentation).
+Step 12 was approved by the user after reviewing standalone HTML rendering.
+
+## Step 12: end-to-end verification and phase-one handoff
+
+Implemented:
+
+- A native CLI pipeline matrix covering every maintained example and six
+  generated cases across source, tokens, AST, classification, ANSI and HTML.
+- Assertions for exact statuses/counts, diagnostic agreement, lexical AST gating,
+  recovered structure, resource-limit continuation and unchanged source files.
+- Independent byte-based ANSI/escaped-HTML comparisons, including true CRLF,
+  empty/whitespace input, spaced/leading-dash paths and no final newline.
+- Ten-second process timeouts, a bounded matrix target and retained per-case
+  inputs/captures/diagnostics/previews with a generated review summary.
+- `verify.ps1` for a separate Release build and all tests with no browser/Python
+  dependency, preserving the caller's directory and forwarding failures.
+- A phase-one CLI heading, LF rules for CMake scripts, updated roadmap/README,
+  testing guide, architecture/requirement map and a submission/demo guide.
+- The `phase1-final` snapshot and reproducible source-only ZIP from that commit.
+
+Validation passed:
+
+- A fresh Release configuration built with MinGW GCC 6.3.0, CMake 3.29.2 and
+  Ninja 1.12.0 in strict C++11, with configured warnings and no compiler warnings.
+- All 18 CTest targets passed: nine C++ suites (106 named groups) and nine CLI
+  checks. The new matrix passed 19 cases and 114 native process runs.
+- All source-preservation, escaped HTML, expected diagnostic and error-status
+  comparisons passed; the PAR003 case kept its following after declaration.
+- Confirmed lexically valid syntax-error inputs succeed in token/source modes
+  while analysis/render modes return 1; lexical errors gate AST startup and
+  preserve lexical fallback classification/rendering.
+- Confirmed true CRLF bytes in the generated fixture, a relative leading-dash
+  filename after --, path spaces, empty input and a 400-statement shallow program.
+- A separate BUILD_TESTING=OFF Release configuration built a working CLI.
+- Exported the final source archive, extracted it into a spaced path and rebuilt/
+  tested it without workspace caches, ignored scratch files or reference PDFs.
+
+Phase one is complete for the approved base grammar. Its source, tests,
+documentation and development history are preserved for the next compiler
+phases. Symbol resolution, type checking and code generation remain future work;
+they will begin only after a new user instruction.

@@ -26,7 +26,7 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 11\n"
+    out << "B-Minor Front End - Phase 1\n"
         << "Usage: bminor [--tokens | --ast | --classify | --ansi | --html] [options] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"

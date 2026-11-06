@@ -18,7 +18,8 @@ struct TypeInfo;
 enum class NodeKind {
     Program, VarDecl, FuncDecl, ParamDecl, Identifier, TypeSyntax,
     LiteralExpr, ArrayInitExpr, IdentifierExpr, UnaryExpr, BinaryExpr,
-    GroupExpr, CallExpr, IndexExpr, PostfixExpr
+    GroupExpr, CallExpr, IndexExpr, PostfixExpr, BlockStmt, DeclStmt,
+    ExprStmt, IfStmt, ForStmt, ReturnStmt, PrintStmt
 };
 
 struct AstNode {
@@ -133,13 +134,62 @@ struct ParamDecl final : AstNode {
     std::unique_ptr<TypeSyntax> declared_type;
 };
 
+struct Stmt : AstNode {
+    Stmt(NodeKind kind, const SourceLocation& location);
+};
+
+struct BlockStmt final : Stmt {
+    explicit BlockStmt(const SourceLocation& location);
+    std::vector<std::unique_ptr<Stmt>> statements;
+};
+
+// A declaration remains a declaration node; this wrapper places it in a
+// statement list without giving VarDecl two different AST base classes.
+struct DeclStmt final : Stmt {
+    explicit DeclStmt(const SourceLocation& location);
+    std::unique_ptr<VarDecl> declaration;
+};
+
+struct ExprStmt final : Stmt {
+    explicit ExprStmt(const SourceLocation& location);
+    // Null represents a source semicolon with no expression, not a missing node.
+    std::unique_ptr<Expr> expression;
+};
+
+struct IfStmt final : Stmt {
+    explicit IfStmt(const SourceLocation& location);
+    std::unique_ptr<Expr> condition;
+    std::unique_ptr<Stmt> then_branch;
+    std::unique_ptr<Stmt> else_branch;
+};
+
+struct ForStmt final : Stmt {
+    explicit ForStmt(const SourceLocation& location);
+    // Preserve omitted header expressions as null. Later analysis can interpret
+    // an omitted condition without pretending the source contained "true".
+    std::unique_ptr<Expr> initializer;
+    std::unique_ptr<Expr> condition;
+    std::unique_ptr<Expr> update;
+    std::unique_ptr<Stmt> body;
+};
+
+struct ReturnStmt final : Stmt {
+    explicit ReturnStmt(const SourceLocation& location);
+    std::unique_ptr<Expr> value;
+};
+
+struct PrintStmt final : Stmt {
+    explicit PrintStmt(const SourceLocation& location);
+    std::vector<std::unique_ptr<Expr>> values;
+};
+
 struct FuncDecl final : Decl {
     explicit FuncDecl(const SourceLocation& location);
     std::unique_ptr<Identifier> name;
     std::unique_ptr<TypeSyntax> return_type;
     std::vector<std::unique_ptr<ParamDecl>> parameters;
-    // Step 5 creates prototypes. A body field and statement nodes arrive in
-    // step 7; definitions are explicitly rejected until they can be parsed.
+    // A null body is a prototype; a non-null body is a parsed definition.
+    std::unique_ptr<BlockStmt> body;
 };
 
 struct Program final : AstNode {

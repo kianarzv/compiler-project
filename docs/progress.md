@@ -217,4 +217,49 @@ Function bodies/statements remain for step 7 and panic-mode syntax recovery for
 step 8. Parsing still leaves name, type, constant and assignment-target checks
 to semantic analysis.
 
-Next review gate: user approval before step 7 (statements and function bodies).
+Step 7 was approved by the user after reviewing expression parsing.
+
+## Step 7: statements and complete function bodies
+
+Implemented:
+
+- Function definitions with owned block bodies, retaining prototypes as null bodies.
+- Blocks, local variable declarations, expression/empty statements, if/else,
+  for, return and print, using the existing expression parser.
+- Seven statement node kinds with original source positions and null semantic types.
+- Significant-token lookahead to distinguish local declarations from identifier-led
+  expressions, including when comments/whitespace appear before the colon.
+- Nearest-unmatched-if association and all optional for header combinations.
+- Shared global/local variable declaration tails and explicit rejection of nested
+  function declarations and other syntax outside the selected base grammar.
+- Recursion guards for nested statements, preserving support for wide shallow blocks.
+- A complete-program sample and an intentional failed-body sample, updated English
+  comments/readme/grammar guidance, 12 statement groups and a full-program CLI test.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and enabled compiler warnings, without warnings.
+- All nine CTest targets passed: five unit suites (including 12 new statement
+  groups) and lexical/declaration/expression/statement CLI coverage.
+- Parsed the new sample's three complete definitions and both earlier complete
+  programs (`hello.bminor` and `lexer_full.bminor`) with no parser diagnostics.
+- Verified nearest-else association with unbraced, braced and double-else forms,
+  all eight optional for-header combinations, name/colon lookahead across comments,
+  block structure, empty statements, print value order and optional returns.
+- Verified exact CRLF keyword/block/empty-statement source locations, null semantic
+  annotations and AST labels that distinguish prototypes from empty definitions.
+- Checked malformed statements, missing braces at EOF, forbidden nested functions,
+  top-level syntax boundaries and continued separation of semantic checks.
+- Deep blocks/branches/loops returned PAR003, while 400 shallow statements parsed.
+- Checked first-error cleanup and parser reuse; an incomplete function was dropped
+  while preceding global declarations remained and later declarations were not parsed.
+- The complete sample's AST matched a CRLF copy in a path containing spaces.
+  Token-mode source reconstruction and the earlier source-display mode still passed.
+- `run.ps1 -Ast` forwarded complete AST output and the failed-body sample's single
+  PAR001 with exit code 1; lexical-error gating still avoided duplicate messages.
+
+The selected syntax grammar is implemented. Syntax recovery remains for step 8,
+and semantic checks remain for later project phases. A body error currently
+discards the incomplete function and stops before later top-level declarations.
+
+Next review gate: user approval before step 8 (panic-mode syntax recovery).

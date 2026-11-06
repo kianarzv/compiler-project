@@ -22,6 +22,8 @@ enum class DiagnosticCode {
     IdentifierTooLong,
     StringTooLong,
     UnexpectedToken,
+    // Kept as a stable code from the earlier partial parser. The selected
+    // grammar is now implemented, so normal parsing no longer emits PAR002.
     UnsupportedSyntax,
     ParserNestingLimit
 };

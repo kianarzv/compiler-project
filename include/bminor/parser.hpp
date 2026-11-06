@@ -28,6 +28,7 @@ public:
 
 private:
     const Token& current() const;
+    const Token& lookahead(std::size_t distance) const;
     bool check(TokenKind kind) const;
     Token advance();
     bool match(TokenKind kind);
@@ -38,7 +39,14 @@ private:
     void check_expression_depth(const Expr& expression);
 
     std::unique_ptr<Decl> parse_declaration();
+    std::unique_ptr<VarDecl> parse_variable_declaration(const Token& name);
     std::unique_ptr<ParamDecl> parse_parameter();
+    std::unique_ptr<BlockStmt> parse_block();
+    std::unique_ptr<Stmt> parse_statement();
+    std::unique_ptr<Stmt> parse_if();
+    std::unique_ptr<Stmt> parse_for();
+    std::unique_ptr<Stmt> parse_return();
+    std::unique_ptr<Stmt> parse_print();
     std::unique_ptr<TypeSyntax> parse_atomic_type(bool allow_void);
     std::unique_ptr<TypeSyntax> parse_value_type(bool allow_unsized);
     std::unique_ptr<Expr> parse_initializer();

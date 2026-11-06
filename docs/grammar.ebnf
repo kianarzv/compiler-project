@@ -1,6 +1,6 @@
 (* Target grammar for the selected base B-Minor dialect.
-   Step 6 implements declarations and expressions; statements arrive in step 7.
-   The current boundary is described in parser-design.md.
+   The selected syntax is implemented through step 7. Error recovery and later
+   semantic work are described separately in parser-design.md.
    Quotes denote source terminals; names in capitals denote lexer token kinds.
    [x] is optional, {x} repeats zero or more times, and | separates choices. *)
 

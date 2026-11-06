@@ -94,6 +94,24 @@ function prototype and a variable. Variable types are read by
 use `parse_atomic_type(true)` to admit `void`; parameter types additionally
 permit unsized arrays. Each parameter has its own name and type child nodes.
 
+After a function signature, `;` leaves the body's pointer null for a prototype.
+`=` calls `parse_block()`, which requires braces and parses every statement.
+The printer distinguishes `FuncDecl prototype` and `FuncDecl definition`.
+
+`parse_statement()` dispatches keywords to `parse_if()`, `parse_for()`,
+`parse_return()` and `parse_print()`. A leading `{` parses a nested block. For
+an identifier, `lookahead(1)` checks the next significant token: `:` means a
+local declaration, while a call/assignment/name remains an expression statement.
+The global and local paths share `parse_variable_declaration()` after consuming
+the name/colon. `DeclStmt` owns the resulting local variable node.
+
+`parse_if()` parses its child statement before looking for an `else`. An inner
+if therefore consumes its own else first, giving the documented nearest-if
+association. `parse_for()` preserves each missing header expression as null,
+then parses an ordinary statement for the body. `return;` has a null value,
+and `;` is a real `ExprStmt` with a null expression. Print requires at least
+one value, with comma-separated expressions followed by a semicolon.
+
 `parse_initializer()` handles nested braced lists or delegates to
 `parse_expression()`. Array bounds use the same expression entry point. From
 there, `parse_assignment()` calls progressively tighter precedence routines.
@@ -119,9 +137,9 @@ recursive parsing. Both protect the later AST printer and automatic cleanup.
 
 An error creates a structured parser diagnostic and throws a private
 `ParseFailure` signal. `parse()` catches it, automatically destroys the
-incomplete declaration, and returns any complete earlier declarations. A
-`PAR002` message explicitly marks syntax scheduled for a later step rather
-than accepting an unparsed body. Panic-mode recovery comes in step 8.
+incomplete top-level declaration, and returns any complete earlier declarations.
+For an error in a function body, that whole incomplete function is destroyed;
+later declarations are not parsed yet. Panic-mode recovery comes in step 8.
 
 `ParseResult` owns the `Program` and diagnostics. Nodes own their children with
 `unique_ptr`; no AST data depends on the input vector's lifetime. All node
@@ -132,5 +150,8 @@ what was written in the file. `dump_ast()` traverses these nodes for display.
 To extend parsing, update the appropriate routine in `src/parser.cpp`, the node
 definitions in `include/bminor/ast.hpp`, and the printer in `src/ast.cpp`.
 Document grammar choices in `docs/parser-design.md` and test tree shape as well
-as successful parsing. The target and current subset are documented separately
-so a grammar rule in a future step does not imply it is already implemented.
+as successful parsing. `tests/statement_tests.cpp` covers statement structure,
+nearest-else association, optional for headers, positions and nesting limits;
+`tests/check_statement_cli.cmake` exercises full program files and failed bodies.
+The selected syntax grammar is now implemented, with syntax recovery and
+semantic analysis still treated as separate work.

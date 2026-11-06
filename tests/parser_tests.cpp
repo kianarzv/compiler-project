@@ -148,15 +148,18 @@ void partial_tree_and_eof_errors() {
             "A missing token at EOF must have an empty source span.");
 }
 
-void unsupported_later_steps() {
-    for (const std::string source : {
-            "f: function integer () = { return 0; }"}) {
-        const auto result = parse(source);
-        require(result.has_errors() && result.diagnostics.size() == 1
-                    && result.diagnostics[0].code == DiagnosticCode::UnsupportedSyntax
-                    && result.program->declarations.empty(),
-                "Unimplemented syntax must not be silently accepted or skipped.");
-    }
+void function_definitions() {
+    const auto result = parse("f: function integer () = { return 0; } "
+                              "empty: function void () = {}");
+    require(!result.has_errors() && result.program->declarations.size() == 2,
+            "Function definitions were not parsed.");
+    const auto& function = static_cast<const bminor::FuncDecl&>(*result.program->declarations[0]);
+    const auto& empty = static_cast<const bminor::FuncDecl&>(*result.program->declarations[1]);
+    require(function.body && function.body->statements.size() == 1
+                && function.body->statements[0]->kind == NodeKind::ReturnStmt,
+            "Function body was skipped instead of parsed.");
+    require(empty.body && empty.body->statements.empty(),
+            "An empty definition must differ from a prototype's null body.");
 }
 
 void malformed_declarations() {
@@ -245,7 +248,7 @@ int main() {
         {"function prototypes", function_prototypes},
         {"trivia and source locations", trivia_and_locations},
         {"partial AST and EOF errors", partial_tree_and_eof_errors},
-        {"unsupported function bodies", unsupported_later_steps},
+        {"function definitions", function_definitions},
         {"malformed declarations", malformed_declarations},
         {"syntax without semantic checks", syntax_without_semantic_checks},
         {"bounded nesting", nesting_limit},

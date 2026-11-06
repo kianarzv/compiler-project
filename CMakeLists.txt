@@ -34,6 +34,9 @@ if(BUILD_TESTING)
     add_executable(expression_tests tests/expression_tests.cpp)
     target_link_libraries(expression_tests PRIVATE bminor_core)
     add_test(NAME expression_tests COMMAND expression_tests)
+    add_executable(statement_tests tests/statement_tests.cpp)
+    target_link_libraries(statement_tests PRIVATE bminor_core)
+    add_test(NAME statement_tests COMMAND statement_tests)
     add_test(NAME lexical_cli_recovery
         COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:bminor>
@@ -55,9 +58,18 @@ if(BUILD_TESTING)
             -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/expression_error.bminor
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_expression_cli.cmake
     )
+    add_test(NAME statement_ast_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:bminor>
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/statements.bminor
+            -DHELLO=${CMAKE_CURRENT_SOURCE_DIR}/examples/hello.bminor
+            -DLEXER_SAMPLE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lexer_full.bminor
+            -DERROR_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/examples/statement_error.bminor
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_statement_cli.cmake
+    )
 endif()
 
-foreach(target bminor_core bminor lexer_tests diagnostic_tests parser_tests expression_tests)
+foreach(target bminor_core bminor lexer_tests diagnostic_tests parser_tests expression_tests statement_tests)
     if(NOT TARGET ${target})
         continue()
     endif()

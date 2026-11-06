@@ -26,6 +26,11 @@ bool is_literal(TokenKind kind) {
         || kind == TokenKind::StringLiteral || kind == TokenKind::CharacterLiteral;
 }
 
+bool is_trivia(TokenKind kind) {
+    return kind == TokenKind::Whitespace || kind == TokenKind::LineComment
+        || kind == TokenKind::BlockComment;
+}
+
 } // namespace
 
 Parser::Parser(const std::vector<Token>& tokens) : tokens_(tokens) {
@@ -55,9 +60,19 @@ ParseResult Parser::parse() {
 const Token& Parser::current() const { return tokens_[position_]; }
 bool Parser::check(TokenKind kind) const { return current().kind == kind; }
 
+const Token& Parser::lookahead(std::size_t distance) const {
+    // Count significant tokens rather than vector entries. A comment between
+    // a local variable's name and ':' must not change the declaration decision.
+    std::size_t index = position_;
+    while (distance > 0 && tokens_[index].kind != TokenKind::EndOfFile) {
+        do { ++index; } while (is_trivia(tokens_[index].kind));
+        --distance;
+    }
+    return tokens_[index];
+}
+
 void Parser::skip_trivia() {
-    while (check(TokenKind::Whitespace) || check(TokenKind::LineComment)
-           || check(TokenKind::BlockComment)) {
+    while (is_trivia(current().kind)) {
         ++position_;
     }
 }
@@ -89,8 +104,8 @@ void Parser::fail(DiagnosticCode code, const std::string& message) {
 }
 
 void Parser::check_nesting() {
-    // Bound recursive types, initializers and expression edges before exhausting
-    // stack. The guard restores the counter even while a parse failure unwinds.
+    // Bound recursive types, statements and expression edges before exhausting
+    // the stack. The guard restores the counter while a parse failure unwinds.
     if (nesting_ >= max_parser_depth) {
         fail(DiagnosticCode::ParserNestingLimit, "Parser nesting exceeds the limit of 128.");
     }
@@ -331,19 +346,116 @@ std::unique_ptr<Decl> Parser::parse_declaration() {
             } while (match(TokenKind::Comma));
         }
         expect(TokenKind::RightParen, "Expected ')' after the parameter list.");
-        if (check(TokenKind::Assign)) {
-            fail(DiagnosticCode::UnsupportedSyntax, "Function bodies arrive in step 7; use a prototype for now.");
+        if (match(TokenKind::Assign)) {
+            function->body = parse_block();
+        } else {
+            expect(TokenKind::Semicolon, "Expected ';' after the function prototype.");
         }
-        expect(TokenKind::Semicolon, "Expected ';' after the function prototype.");
         return std::unique_ptr<Decl>(function.release());
     }
 
+    auto variable = parse_variable_declaration(name);
+    return std::unique_ptr<Decl>(variable.release());
+}
+
+std::unique_ptr<VarDecl> Parser::parse_variable_declaration(const Token& name) {
+    // Both global and local declarations share this tail after name and colon.
     std::unique_ptr<VarDecl> variable(new VarDecl(name.location));
     variable->name.reset(new Identifier(name));
     variable->declared_type = parse_value_type(false);
     if (match(TokenKind::Assign)) { variable->initializer = parse_initializer(); }
     expect(TokenKind::Semicolon, "Expected ';' after the variable declaration.");
-    return std::unique_ptr<Decl>(variable.release());
+    return variable;
+}
+
+std::unique_ptr<BlockStmt> Parser::parse_block() {
+    check_nesting();
+    NestingGuard guard(nesting_);
+    const Token opening = expect(TokenKind::LeftBrace, "Expected '{' before the function or block body.");
+    std::unique_ptr<BlockStmt> block(new BlockStmt(opening.location));
+    while (!check(TokenKind::RightBrace) && !check(TokenKind::EndOfFile)) {
+        block->statements.push_back(parse_statement());
+    }
+    expect(TokenKind::RightBrace, "Expected '}' after the block body.");
+    return block;
+}
+
+std::unique_ptr<Stmt> Parser::parse_statement() {
+    // Blocks establish their own guard; other statements hold one while parsing
+    // nested branches/bodies. Wide statement lists do not accumulate nesting.
+    if (check(TokenKind::LeftBrace)) {
+        return std::unique_ptr<Stmt>(parse_block().release());
+    }
+    check_nesting();
+    NestingGuard guard(nesting_);
+    if (check(TokenKind::KwIf)) { return parse_if(); }
+    if (check(TokenKind::KwFor)) { return parse_for(); }
+    if (check(TokenKind::KwReturn)) { return parse_return(); }
+    if (check(TokenKind::KwPrint)) { return parse_print(); }
+
+    if (check(TokenKind::Identifier) && lookahead(1).kind == TokenKind::Colon) {
+        const Token name = advance();
+        expect(TokenKind::Colon, "Expected ':' after the local declaration name.");
+        if (check(TokenKind::KwFunction)) {
+            fail(DiagnosticCode::UnexpectedToken, "Function declarations are only allowed at program scope.");
+        }
+        std::unique_ptr<DeclStmt> statement(new DeclStmt(name.location));
+        statement->declaration = parse_variable_declaration(name);
+        return std::unique_ptr<Stmt>(statement.release());
+    }
+
+    const SourceLocation start = current().location;
+    std::unique_ptr<ExprStmt> statement(new ExprStmt(start));
+    if (!check(TokenKind::Semicolon)) { statement->expression = parse_expression(); }
+    expect(TokenKind::Semicolon, "Expected ';' after the expression statement.");
+    return std::unique_ptr<Stmt>(statement.release());
+}
+
+std::unique_ptr<Stmt> Parser::parse_if() {
+    const Token keyword = advance();
+    std::unique_ptr<IfStmt> statement(new IfStmt(keyword.location));
+    expect(TokenKind::LeftParen, "Expected '(' after 'if'.");
+    statement->condition = parse_expression();
+    expect(TokenKind::RightParen, "Expected ')' after the if condition.");
+    statement->then_branch = parse_statement();
+    // The nested statement consumes its own available else before returning.
+    // This makes an else bind to the nearest unmatched if without backtracking.
+    if (match(TokenKind::KwElse)) { statement->else_branch = parse_statement(); }
+    return std::unique_ptr<Stmt>(statement.release());
+}
+
+std::unique_ptr<Stmt> Parser::parse_for() {
+    const Token keyword = advance();
+    std::unique_ptr<ForStmt> statement(new ForStmt(keyword.location));
+    expect(TokenKind::LeftParen, "Expected '(' after 'for'.");
+    if (!check(TokenKind::Semicolon)) { statement->initializer = parse_expression(); }
+    expect(TokenKind::Semicolon, "Expected ';' after the for initializer.");
+    if (!check(TokenKind::Semicolon)) { statement->condition = parse_expression(); }
+    expect(TokenKind::Semicolon, "Expected ';' after the for condition.");
+    if (!check(TokenKind::RightParen)) { statement->update = parse_expression(); }
+    expect(TokenKind::RightParen, "Expected ')' after the for update.");
+    statement->body = parse_statement();
+    return std::unique_ptr<Stmt>(statement.release());
+}
+
+std::unique_ptr<Stmt> Parser::parse_return() {
+    const Token keyword = advance();
+    std::unique_ptr<ReturnStmt> statement(new ReturnStmt(keyword.location));
+    if (!check(TokenKind::Semicolon)) { statement->value = parse_expression(); }
+    expect(TokenKind::Semicolon, "Expected ';' after the return statement.");
+    return std::unique_ptr<Stmt>(statement.release());
+}
+
+std::unique_ptr<Stmt> Parser::parse_print() {
+    const Token keyword = advance();
+    std::unique_ptr<PrintStmt> statement(new PrintStmt(keyword.location));
+    // The grammar requires at least one value; a trailing comma therefore also
+    // produces an expression diagnostic rather than being accepted as empty.
+    do {
+        statement->values.push_back(parse_expression());
+    } while (match(TokenKind::Comma));
+    expect(TokenKind::Semicolon, "Expected ';' after the print statement.");
+    return std::unique_ptr<Stmt>(statement.release());
 }
 
 } // namespace bminor

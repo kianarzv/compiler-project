@@ -1,0 +1,32 @@
+// Step 7: complete functions with declarations, branches, loops and calls.
+sum: function integer (items: array [] integer, count: integer) = {
+    total: integer = 0;
+    i: integer;
+    for (i = 0; i < count; i++) {
+        total = total + items[i];
+    }
+    return total;
+}
+
+announce: function void (message: string) = {
+    print message;
+    return;
+}
+
+main: function integer () = {
+    values: array [3] integer = {1, 2, 3};
+    result: integer = sum(values, 3);
+    if (result > 3)
+        print "large: ", result, "\n";
+    else {
+        print "small\n";
+    }
+    {
+        result: integer = 99;
+        print "inner: ", result, "\n";
+    }
+    for (; result > 0; ) result--;
+    announce("done\n");
+    ;
+    return 0;
+}

@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 6
+## Current state: step 7
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -18,11 +18,13 @@ continues to EOF. Token mode prints diagnostics on stderr and returns exit
 code 1 when any lexical error is present.
 
 `--ast` parses declarations, nested array types, expression/braced initializers
-and function prototypes. Expressions include arithmetic, comparisons, logical
+and function prototypes/definitions. Expressions include arithmetic, comparisons, logical
 operators, assignment, unary minus/not, groups, calls, indexing and postfix
 increment/decrement. Array sizes also accept expressions. The AST retains source
-locations and null semantic-type annotations. Function bodies remain for step 7;
-syntax parsing currently stops after its first error, retaining completed declarations.
+locations and null semantic-type annotations. Function bodies support local
+declarations, blocks, if/else, for, return, print and expression/empty statements.
+Syntax parsing currently stops after its first error, retaining completed
+top-level declarations; panic-mode recovery arrives in step 8.
 
 ## Build and run on Windows
 
@@ -72,6 +74,23 @@ array initializers and functions with ordinary/unsized-array parameters.
 `-Ast` and `-Tokens` are alternative display modes; whitespace display applies
 only to token mode.
 
+To inspect a complete program with function bodies and statements:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/statements.bminor -Ast
+```
+
+This sample includes three functions, local arrays, calls, nested blocks,
+branches, loops with optional header fields, a bare `return;`, and an empty
+statement. The tree shows `FuncDecl definition`, `BlockStmt`, `DeclStmt`,
+`IfStmt`, `ForStmt`, `ReturnStmt`, `PrintStmt` and `ExprStmt` nodes. A prototype
+still appears as `FuncDecl prototype`. An available `else` attaches to the
+nearest unmatched `if`. `ForStmt` labels show which optional header fields exist.
+
+The earlier `hello.bminor` and `lexer_full.bminor` samples now work with `-Ast`
+too. This tool displays the program structure; semantic analysis and execution
+are separate from this phase-one parser.
+
 To inspect the new expression trees:
 
 ```powershell
@@ -92,9 +111,12 @@ or expression-tree height; the current implementation limit is 128.
 
 For a partial AST and a syntax diagnostic, use
 `-Source examples/declaration_error.bminor -Ast`. It retains `ready`, reports
-`PAR001` for the missing colon, and stops before `unreached`. The full B-Minor
-programs in `hello.bminor` and `lexer_full.bminor` can still be tokenized, but
-their function bodies produce `PAR002` in AST mode until step 7.
+`PAR001` for the missing colon, and stops before `unreached`.
+
+For an error inside a function, use `-Source examples/statement_error.bminor -Ast`.
+The missing semicolon after `return 0` is reported at line 5, column 1. The
+earlier global `version` declaration remains in the tree; the incomplete
+function and later declarations are omitted until syntax recovery is added.
 
 Add `-ShowWhitespace` to include escaped spaces and line endings in the table.
 Comments are shown even when whitespace is hidden. To compare with step 2,
@@ -140,6 +162,7 @@ cmake --build build
 .\build\bminor.exe --tokens examples/lexer_full.bminor
 .\build\bminor.exe --ast examples/declarations.bminor
 .\build\bminor.exe --ast examples/expressions.bminor
+.\build\bminor.exe --ast examples/statements.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -173,26 +196,29 @@ it does not perform lexical validation.
 - `include/bminor/diagnostic.hpp` and `src/diagnostic.cpp`: diagnostic data,
   stable error codes and message rendering.
 - `include/bminor/ast.hpp` and `src/ast.cpp`: owned syntax nodes and tree output.
-- `include/bminor/parser.hpp` and `src/parser.cpp`: declaration/type/expression parsing.
+- `include/bminor/parser.hpp` and `src/parser.cpp`: declarations, types, expressions and statements.
 - `include/bminor/text_output.hpp` and `src/text_output.cpp`: shared escaped text display.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
   comments, malformed input, positions and complete source coverage.
 - `tests/diagnostic_tests.cpp`: 10 regression groups for error causes, spans,
   length boundaries, recovery and owned scan results.
 - `tests/check_lexical_cli.cmake`: real CLI output streams and error exit status.
-- `tests/parser_tests.cpp`: 12 groups for declaration structure, positions,
-  syntax errors, unfinished features, nesting limits and AST ownership.
+- `tests/parser_tests.cpp`: 12 groups for declaration/function structure,
+  positions, syntax errors, nesting limits and AST ownership.
 - `tests/check_ast_cli.cmake`: valid/partial AST output and lexical-error gating.
 - `tests/expression_tests.cpp`: 10 groups checking exact expression shapes,
   precedence, associativity, calls/indexing, positions, errors and depth limits.
 - `tests/check_expression_cli.cmake`: expression AST output and malformed-call reporting.
+- `tests/statement_tests.cpp`: 12 groups for bodies, local declarations, nearest
+  else, optional for headers, locations, errors and bounded statement nesting.
+- `tests/check_statement_cli.cmake`: complete programs and failed-function output.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.
 - `docs/lexical-rules.md`: selected dialect, formal rules and current limits.
 - `docs/code-walkthrough.md`: execution flow and where to make future changes.
-- `docs/grammar.ebnf`: the target B-Minor grammar for steps 5 through 7.
-- `docs/parser-design.md`: implemented subset, FIRST/FOLLOW decisions, precedence,
+- `docs/grammar.ebnf`: the implemented B-Minor syntax grammar.
+- `docs/parser-design.md`: supported syntax, FIRST/FOLLOW decisions, precedence,
   AST ownership and current parser limitations.
 
 Source text is retained without newline conversion, since later output must

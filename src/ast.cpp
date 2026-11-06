@@ -55,6 +55,14 @@ TypeSyntax::TypeSyntax(TypeKind type_kind, const SourceLocation& location)
 Decl::Decl(NodeKind kind, const SourceLocation& location) : AstNode(kind, location) {}
 VarDecl::VarDecl(const SourceLocation& location) : Decl(NodeKind::VarDecl, location) {}
 ParamDecl::ParamDecl(const SourceLocation& location) : AstNode(NodeKind::ParamDecl, location) {}
+Stmt::Stmt(NodeKind kind, const SourceLocation& location) : AstNode(kind, location) {}
+BlockStmt::BlockStmt(const SourceLocation& location) : Stmt(NodeKind::BlockStmt, location) {}
+DeclStmt::DeclStmt(const SourceLocation& location) : Stmt(NodeKind::DeclStmt, location) {}
+ExprStmt::ExprStmt(const SourceLocation& location) : Stmt(NodeKind::ExprStmt, location) {}
+IfStmt::IfStmt(const SourceLocation& location) : Stmt(NodeKind::IfStmt, location) {}
+ForStmt::ForStmt(const SourceLocation& location) : Stmt(NodeKind::ForStmt, location) {}
+ReturnStmt::ReturnStmt(const SourceLocation& location) : Stmt(NodeKind::ReturnStmt, location) {}
+PrintStmt::PrintStmt(const SourceLocation& location) : Stmt(NodeKind::PrintStmt, location) {}
 FuncDecl::FuncDecl(const SourceLocation& location) : Decl(NodeKind::FuncDecl, location) {}
 Program::Program(const SourceLocation& location) : AstNode(NodeKind::Program, location) {}
 
@@ -79,7 +87,9 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
     switch (node.kind) {
     case NodeKind::Program:       out << "Program"; break;
     case NodeKind::VarDecl:       out << "VarDecl"; break;
-    case NodeKind::FuncDecl:      out << "FuncDecl prototype"; break;
+    case NodeKind::FuncDecl:
+        out << (static_cast<const FuncDecl&>(node).body ? "FuncDecl definition" : "FuncDecl prototype");
+        break;
     case NodeKind::ParamDecl:     out << "ParamDecl"; break;
     case NodeKind::Identifier:
         out << "Identifier ";
@@ -119,6 +129,27 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
     case NodeKind::GroupExpr: out << "GroupExpr"; break;
     case NodeKind::CallExpr:  out << "CallExpr"; break;
     case NodeKind::IndexExpr: out << "IndexExpr"; break;
+    case NodeKind::BlockStmt: out << "BlockStmt"; break;
+    case NodeKind::DeclStmt:  out << "DeclStmt"; break;
+    case NodeKind::ExprStmt:
+        out << (static_cast<const ExprStmt&>(node).expression ? "ExprStmt" : "ExprStmt empty");
+        break;
+    case NodeKind::IfStmt:
+        out << "IfStmt else=" << (static_cast<const IfStmt&>(node).else_branch ? "yes" : "no");
+        break;
+    case NodeKind::ForStmt: {
+        const auto& loop = static_cast<const ForStmt&>(node);
+        out << "ForStmt init=" << (loop.initializer ? "yes" : "no")
+            << " condition=" << (loop.condition ? "yes" : "no")
+            << " update=" << (loop.update ? "yes" : "no");
+        break;
+    }
+    case NodeKind::ReturnStmt:
+        out << (static_cast<const ReturnStmt&>(node).value ? "ReturnStmt" : "ReturnStmt empty");
+        break;
+    case NodeKind::PrintStmt:
+        out << "PrintStmt values=" << static_cast<const PrintStmt&>(node).values.size();
+        break;
     }
     out << " @" << node.location.filename << ':' << node.location.line
         << ':' << node.location.column
@@ -148,6 +179,7 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
         for (const auto& parameter : function.parameters) {
             dump_node(out, *parameter, depth + 1);
         }
+        if (function.body) { dump_node(out, *function.body, depth + 1); }
         break;
     }
     case NodeKind::ParamDecl: {
@@ -204,6 +236,44 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
         dump_node(out, *index.index, depth + 1);
         break;
     }
+    case NodeKind::BlockStmt:
+        for (const auto& statement : static_cast<const BlockStmt&>(node).statements) {
+            dump_node(out, *statement, depth + 1);
+        }
+        break;
+    case NodeKind::DeclStmt:
+        dump_node(out, *static_cast<const DeclStmt&>(node).declaration, depth + 1);
+        break;
+    case NodeKind::ExprStmt:
+        if (static_cast<const ExprStmt&>(node).expression) {
+            dump_node(out, *static_cast<const ExprStmt&>(node).expression, depth + 1);
+        }
+        break;
+    case NodeKind::IfStmt: {
+        const auto& branch = static_cast<const IfStmt&>(node);
+        dump_node(out, *branch.condition, depth + 1);
+        dump_node(out, *branch.then_branch, depth + 1);
+        if (branch.else_branch) { dump_node(out, *branch.else_branch, depth + 1); }
+        break;
+    }
+    case NodeKind::ForStmt: {
+        const auto& loop = static_cast<const ForStmt&>(node);
+        if (loop.initializer) { dump_node(out, *loop.initializer, depth + 1); }
+        if (loop.condition) { dump_node(out, *loop.condition, depth + 1); }
+        if (loop.update) { dump_node(out, *loop.update, depth + 1); }
+        dump_node(out, *loop.body, depth + 1);
+        break;
+    }
+    case NodeKind::ReturnStmt:
+        if (static_cast<const ReturnStmt&>(node).value) {
+            dump_node(out, *static_cast<const ReturnStmt&>(node).value, depth + 1);
+        }
+        break;
+    case NodeKind::PrintStmt:
+        for (const auto& value : static_cast<const PrintStmt&>(node).values) {
+            dump_node(out, *value, depth + 1);
+        }
+        break;
     }
 }
 

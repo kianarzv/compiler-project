@@ -1,0 +1,6 @@
+version: integer = 1;
+main: function integer () = {
+    print "before the error\n";
+    return 0
+}
+later: integer = 2;

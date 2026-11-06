@@ -1,10 +1,14 @@
 param(
-    [string]$Source = "examples/hello.bminor"
+    [string]$Source = "examples/hello.bminor",
+    [switch]$Tokens,
+    [switch]$ShowWhitespace
 )
 
 $ErrorActionPreference = "Stop"
 $runExitCode = 1
 
+# Resolve relative paths from the project directory, even when called elsewhere.
+# finally restores the caller's directory on both success and failure.
 Push-Location $PSScriptRoot
 try {
     cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER=g++
@@ -13,7 +17,13 @@ try {
     cmake --build build
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    & "$PSScriptRoot/build/bminor.exe" $Source
+    # Forward each argument separately so paths containing spaces stay intact.
+    $programArgs = @()
+    if ($Tokens) { $programArgs += "--tokens" }
+    if ($ShowWhitespace) { $programArgs += "--show-whitespace" }
+    $programArgs += "--"
+    $programArgs += $Source
+    & "$PSScriptRoot/build/bminor.exe" @programArgs
     $runExitCode = $LASTEXITCODE
 } finally {
     Pop-Location

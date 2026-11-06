@@ -34,10 +34,11 @@ happens; this repository will also be used for later project phases.
 ## Specification points to resolve before the dependent steps
 
 The supplied PDF includes an illustrative **C grammar**, not the complete
-B-Minor grammar. Before completing the lexer and parser, establish the exact
-course B-Minor dialect, including its keyword list, operators, literals, types,
-declarations and statement forms. The EBNF appendix explains notation; it is
-not a B-Minor language specification.
+B-Minor grammar. The EBNF appendix explains notation; it is not a B-Minor
+language specification. For step 2, the user approved proceeding with the base
+textbook dialect. Its reference and current lexical rules are recorded in
+`docs/lexical-rules.md`. Any later course-specific requirements should be
+documented there before changing the affected lexer or parser rules.
 
 The PDF mentions at least one output format in its overview, while the rubric
 lists ANSI and HTML/CSS. This plan includes both formats.

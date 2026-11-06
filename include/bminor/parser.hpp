@@ -4,6 +4,7 @@
 #include "bminor/ast.hpp"
 #include "bminor/diagnostic.hpp"
 
+#include <initializer_list>
 #include <memory>
 #include <vector>
 
@@ -21,7 +22,7 @@ struct ParseResult {
 class Parser {
 public:
     explicit Parser(const std::vector<Token>& tokens);
-    // Step 5 stops at the first syntax error and retains completed declarations.
+    // Stops at the first syntax error and retains completed declarations.
     // Panic-mode recovery across syntax errors is scheduled for step 8.
     ParseResult parse();
 
@@ -34,12 +35,31 @@ private:
     void skip_trivia();
     [[noreturn]] void fail(DiagnosticCode code, const std::string& message);
     void check_nesting();
+    void check_expression_depth(const Expr& expression);
 
     std::unique_ptr<Decl> parse_declaration();
     std::unique_ptr<ParamDecl> parse_parameter();
     std::unique_ptr<TypeSyntax> parse_atomic_type(bool allow_void);
     std::unique_ptr<TypeSyntax> parse_value_type(bool allow_unsized);
     std::unique_ptr<Expr> parse_initializer();
+    std::unique_ptr<Expr> parse_expression();
+    std::unique_ptr<Expr> parse_assignment();
+    std::unique_ptr<Expr> parse_logical_or();
+    std::unique_ptr<Expr> parse_logical_and();
+    std::unique_ptr<Expr> parse_equality();
+    std::unique_ptr<Expr> parse_relational();
+    std::unique_ptr<Expr> parse_additive();
+    std::unique_ptr<Expr> parse_multiplicative();
+    std::unique_ptr<Expr> parse_power();
+    std::unique_ptr<Expr> parse_unary();
+    std::unique_ptr<Expr> parse_postfix();
+    std::unique_ptr<Expr> parse_primary();
+
+    // Each left-associative level supplies its tighter operand routine and
+    // operator set. The shared loop implements the same left fold for all levels.
+    using OperandParser = std::unique_ptr<Expr> (Parser::*)();
+    std::unique_ptr<Expr> parse_left_associative(
+        OperandParser operand_parser, std::initializer_list<TokenKind> operators);
 
     const std::vector<Token>& tokens_;
     std::size_t position_ = 0;

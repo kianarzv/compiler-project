@@ -3,6 +3,7 @@
 
 #include "bminor/token.hpp"
 
+#include <cstddef>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -16,7 +17,8 @@ struct TypeInfo;
 
 enum class NodeKind {
     Program, VarDecl, FuncDecl, ParamDecl, Identifier, TypeSyntax,
-    LiteralExpr, ArrayInitExpr
+    LiteralExpr, ArrayInitExpr, IdentifierExpr, UnaryExpr, BinaryExpr,
+    GroupExpr, CallExpr, IndexExpr, PostfixExpr
 };
 
 struct AstNode {
@@ -35,6 +37,60 @@ struct Identifier final : AstNode {
 
 struct Expr : AstNode {
     Expr(NodeKind kind, const SourceLocation& location);
+    // Iterative parsing can still build deep left-associated or postfix trees.
+    // Track height so the parser can bound traversal/destruction depth as well
+    // as its own recursive call depth. A leaf has depth 1.
+    std::size_t depth = 1;
+};
+
+struct IdentifierExpr final : Expr {
+    explicit IdentifierExpr(const Token& token);
+    std::string name;
+};
+
+struct UnaryExpr final : Expr {
+    UnaryExpr(const Token& operation, std::unique_ptr<Expr> operand);
+    Token operation;
+    std::unique_ptr<Expr> operand;
+};
+
+struct BinaryExpr final : Expr {
+    BinaryExpr(const Token& operation, std::unique_ptr<Expr> left,
+               std::unique_ptr<Expr> right);
+    // Assignment uses this node too. The exact operator token retains its own
+    // location; the expression's first token is the start of its left operand.
+    Token operation;
+    std::unique_ptr<Expr> left;
+    std::unique_ptr<Expr> right;
+};
+
+struct GroupExpr final : Expr {
+    GroupExpr(const Token& opening, std::unique_ptr<Expr> expression);
+    // Keep an explicit group so its opening-parenthesis location does not
+    // overwrite the original location of a name or literal inside it.
+    Token opening;
+    std::unique_ptr<Expr> expression;
+};
+
+struct CallExpr final : Expr {
+    CallExpr(const Token& opening, std::unique_ptr<Expr> callee);
+    Token opening;
+    std::unique_ptr<Expr> callee;
+    std::vector<std::unique_ptr<Expr>> arguments;
+};
+
+struct IndexExpr final : Expr {
+    IndexExpr(const Token& opening, std::unique_ptr<Expr> base,
+              std::unique_ptr<Expr> index);
+    Token opening;
+    std::unique_ptr<Expr> base;
+    std::unique_ptr<Expr> index;
+};
+
+struct PostfixExpr final : Expr {
+    PostfixExpr(const Token& operation, std::unique_ptr<Expr> operand);
+    Token operation;
+    std::unique_ptr<Expr> operand;
 };
 
 struct LiteralExpr final : Expr {

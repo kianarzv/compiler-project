@@ -1,0 +1,14 @@
+// Step 6: syntax examples; name/type/constant checks belong to semantic analysis.
+base: integer = 2;
+priority: integer = 1 + 2 * 3;
+grouped: integer = (1 + 2) * 3;
+left_grouping: integer = 20 - 5 - 2;
+power: integer = 2^3^2;
+signed_power: integer = -2^2;
+condition: boolean = 1 + 2 * 3 >= 6 && !false || false;
+called: integer = sum(1 + 2, values[base - 1]);
+indexed: integer = matrix[base][1 + 1];
+updated: integer = values[base]++;
+assigned: integer = a = b = 7;
+values: array [base + 1] integer = {base, base * 2, (base + 1)^2};
+sum: function integer (left: integer, right: integer);

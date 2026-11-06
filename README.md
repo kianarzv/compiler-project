@@ -3,7 +3,7 @@
 A C++ implementation developed in small, runnable steps for phase one of the
 compiler design project. The target language is B-Minor.
 
-## Current state: step 5
+## Current state: step 6
 
 The program can display a source file or tokenize base B-Minor words, decimal
 integers, booleans, strings, characters, operators, delimiters and comments.
@@ -17,11 +17,12 @@ unknown bytes produce `INVALID` rows and structured diagnostics. Scanning
 continues to EOF. Token mode prints diagnostics on stderr and returns exit
 code 1 when any lexical error is present.
 
-The new `--ast` mode parses variable declarations, nested array types, literal
-and braced initializers, and function prototypes. It prints the AST with source
-locations and null semantic-type annotations. Expressions beyond literals and
-function bodies remain scheduled for steps 6 and 7. Syntax parsing currently
-stops after its first error, retaining previously completed declarations.
+`--ast` parses declarations, nested array types, expression/braced initializers
+and function prototypes. Expressions include arithmetic, comparisons, logical
+operators, assignment, unary minus/not, groups, calls, indexing and postfix
+increment/decrement. Array sizes also accept expressions. The AST retains source
+locations and null semantic-type annotations. Function bodies remain for step 7;
+syntax parsing currently stops after its first error, retaining completed declarations.
 
 ## Build and run on Windows
 
@@ -49,7 +50,7 @@ To inspect a valid complete-program sample:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/lexer_full.bminor -Tokens
 ```
 
-To inspect the step-5 declaration tree:
+To inspect a declaration tree:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/declarations.bminor -Ast
@@ -70,6 +71,24 @@ annotation reserved for a later project phase. The sample also contains nested
 array initializers and functions with ordinary/unsized-array parameters.
 `-Ast` and `-Tokens` are alternative display modes; whitespace display applies
 only to token mode.
+
+To inspect the new expression trees:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Source examples/expressions.bminor -Ast
+```
+
+In `priority: integer = 1 + 2 * 3;`, the root is `BinaryExpr "+"` and its right
+child is `BinaryExpr "*"`. `2^3^2` groups to the right; `20-5-2` groups to the
+left. Parentheses produce `GroupExpr` nodes. Calls and indexing appear as
+`CallExpr` and `IndexExpr`, retaining their callee/base and argument/index trees.
+The sample demonstrates syntax; name binding, assignment-target validity and
+constant/type checks belong to later semantic analysis.
+
+For a malformed call, run `-Source examples/expression_error.bminor -Ast`.
+It reports `PAR001` at the missing argument's closing parenthesis and retains
+the completed `ready` declaration. `PAR003` reports excessive recursive nesting
+or expression-tree height; the current implementation limit is 128.
 
 For a partial AST and a syntax diagnostic, use
 `-Source examples/declaration_error.bminor -Ast`. It retains `ready`, reports
@@ -120,6 +139,7 @@ cmake --build build
 .\build\bminor.exe --tokens --show-whitespace examples/tokens_basic.bminor
 .\build\bminor.exe --tokens examples/lexer_full.bminor
 .\build\bminor.exe --ast examples/declarations.bminor
+.\build\bminor.exe --ast examples/expressions.bminor
 ctest --test-dir build --output-on-failure
 ```
 
@@ -153,7 +173,7 @@ it does not perform lexical validation.
 - `include/bminor/diagnostic.hpp` and `src/diagnostic.cpp`: diagnostic data,
   stable error codes and message rendering.
 - `include/bminor/ast.hpp` and `src/ast.cpp`: owned syntax nodes and tree output.
-- `include/bminor/parser.hpp` and `src/parser.cpp`: declaration/type parsing.
+- `include/bminor/parser.hpp` and `src/parser.cpp`: declaration/type/expression parsing.
 - `include/bminor/text_output.hpp` and `src/text_output.cpp`: shared escaped text display.
 - `tests/lexer_tests.cpp`: 16 regression groups for words, literals, operators,
   comments, malformed input, positions and complete source coverage.
@@ -163,6 +183,9 @@ it does not perform lexical validation.
 - `tests/parser_tests.cpp`: 12 groups for declaration structure, positions,
   syntax errors, unfinished features, nesting limits and AST ownership.
 - `tests/check_ast_cli.cmake`: valid/partial AST output and lexical-error gating.
+- `tests/expression_tests.cpp`: 10 groups checking exact expression shapes,
+  precedence, associativity, calls/indexing, positions, errors and depth limits.
+- `tests/check_expression_cli.cmake`: expression AST output and malformed-call reporting.
 - `examples/`: small inputs to run after each step.
 - `docs/roadmap.md`: the staged plan and observable results.
 - `docs/progress.md`: completed work and validation for each step.

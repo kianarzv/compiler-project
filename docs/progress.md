@@ -174,4 +174,47 @@ This is an initial declaration parser. General expressions and array bounds
 arrive in step 6, function bodies/statements in step 7, and panic-mode recovery
 in step 8. Semantic checks are reserved for later project phases.
 
-Next review gate: user approval before step 6 (expression parsing).
+Step 6 was approved by the user after reviewing declaration parsing.
+
+## Step 6: expression parsing and precedence
+
+Implemented:
+
+- Recursive-descent expression routines matching the documented precedence levels.
+- A shared left-fold loop for left-associated operators and right recursion for
+  assignment/power, preserving the choices recorded in step 5.
+- Identifier, unary, binary, group, call, index and postfix AST nodes with owned
+  children, exact operator/delimiter tokens and nullable semantic annotations.
+- Expression-valued initializers, nested initializer elements and array bounds.
+- Explicit group nodes that preserve opening-parenthesis locations without
+  overwriting the source positions of their contained leaves.
+- Active-recursion and expression-height checks, including iterative chains.
+- An expression sample, a malformed-call sample, updated English comments and
+  documentation, ten expression regression groups and an expression CLI test.
+
+Validation passed:
+
+- Built with MinGW GCC 6.3.0 and configured warning flags, without warnings.
+- All seven CTest targets passed: the existing lexer/diagnostic/parser checks,
+  ten expression groups, and the lexical/declaration/expression CLI tests.
+- Checked exact expected tree shapes for arithmetic, comparisons, logic,
+  assignment, exponentiation, prefix/postfix operations, grouping, calls and indices.
+- Checked expression-valued array bounds and nested initializer elements, while
+  preserving original name/operator/delimiter source locations and null types.
+- Checked malformed operands, commas, parentheses, calls and indices, including
+  missing operands at EOF and a diagnostic after a skipped block comment.
+- Deep unary, grouped, assignment, power, left-fold, suffix and nested-call inputs
+  returned PAR003. A left-associated tree of height 128 and a shallow call with
+  300 arguments were accepted; height 129 was rejected safely.
+- The expression sample produced 12 variable declarations and one prototype.
+  Its full AST and coordinates matched a CRLF copy in a path with spaces.
+- Checked the malformed-call sample's single PAR001 and retained earlier
+  declaration, with function bodies still explicitly reserved for step 7.
+- Confirmed old source display and exact token-mode source reconstruction.
+- `run.ps1 -Ast` forwarded the new AST output and expected error exit status.
+
+Function bodies/statements remain for step 7 and panic-mode syntax recovery for
+step 8. Parsing still leaves name, type, constant and assignment-target checks
+to semantic analysis.
+
+Next review gate: user approval before step 7 (statements and function bodies).

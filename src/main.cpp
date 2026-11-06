@@ -18,7 +18,7 @@ struct Options {
 };
 
 void print_usage(std::ostream& out) {
-    out << "B-Minor Front End - Step 5\n"
+    out << "B-Minor Front End - Step 6\n"
         << "Usage: bminor [--tokens | --ast] [--show-whitespace] [--] <source-file>\n"
         << "       bminor --help\n\n"
         << "Default: display the source file and its size.\n"
@@ -28,7 +28,8 @@ void print_usage(std::ostream& out) {
         << "Recognizes base B-Minor literals, operators and comments.\n"
         << "Unknown bytes or malformed tokens appear as INVALID.\n"
         << "In token/AST mode, errors are reported on stderr; exit code 1.\n"
-        << "AST mode currently accepts types, literal initializers and prototypes.\n";
+        << "AST mode accepts declarations, expressions and function prototypes.\n"
+        << "Function bodies and statements arrive in step 7.\n";
 }
 
 Options parse_options(int argc, char* argv[]) {

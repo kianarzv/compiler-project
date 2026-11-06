@@ -1,7 +1,9 @@
 #include "bminor/ast.hpp"
 #include "bminor/text_output.hpp"
 
+#include <algorithm>
 #include <ostream>
+#include <utility>
 
 namespace bminor {
 
@@ -10,6 +12,40 @@ AstNode::AstNode(NodeKind kind, const SourceLocation& location)
 Identifier::Identifier(const Token& token)
     : AstNode(NodeKind::Identifier, token.location), name(token.lexeme) {}
 Expr::Expr(NodeKind kind, const SourceLocation& location) : AstNode(kind, location) {}
+IdentifierExpr::IdentifierExpr(const Token& token)
+    : Expr(NodeKind::IdentifierExpr, token.location), name(token.lexeme) {}
+UnaryExpr::UnaryExpr(const Token& operation, std::unique_ptr<Expr> operand)
+    : Expr(NodeKind::UnaryExpr, operation.location), operation(operation),
+      operand(std::move(operand)) {
+    depth = 1 + this->operand->depth;
+}
+BinaryExpr::BinaryExpr(const Token& operation, std::unique_ptr<Expr> left,
+                       std::unique_ptr<Expr> right)
+    : Expr(NodeKind::BinaryExpr, left->location), operation(operation),
+      left(std::move(left)), right(std::move(right)) {
+    depth = 1 + std::max(this->left->depth, this->right->depth);
+}
+GroupExpr::GroupExpr(const Token& opening, std::unique_ptr<Expr> expression)
+    : Expr(NodeKind::GroupExpr, opening.location), opening(opening),
+      expression(std::move(expression)) {
+    depth = 1 + this->expression->depth;
+}
+CallExpr::CallExpr(const Token& opening, std::unique_ptr<Expr> callee)
+    : Expr(NodeKind::CallExpr, callee->location), opening(opening),
+      callee(std::move(callee)) {
+    depth = 1 + this->callee->depth;
+}
+IndexExpr::IndexExpr(const Token& opening, std::unique_ptr<Expr> base,
+                     std::unique_ptr<Expr> index)
+    : Expr(NodeKind::IndexExpr, base->location), opening(opening),
+      base(std::move(base)), index(std::move(index)) {
+    depth = 1 + std::max(this->base->depth, this->index->depth);
+}
+PostfixExpr::PostfixExpr(const Token& operation, std::unique_ptr<Expr> operand)
+    : Expr(NodeKind::PostfixExpr, operand->location), operation(operation),
+      operand(std::move(operand)) {
+    depth = 1 + this->operand->depth;
+}
 LiteralExpr::LiteralExpr(const Token& token)
     : Expr(NodeKind::LiteralExpr, token.location), literal(token) {}
 ArrayInitExpr::ArrayInitExpr(const SourceLocation& location)
@@ -64,6 +100,25 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
         break;
     }
     case NodeKind::ArrayInitExpr: out << "ArrayInit"; break;
+    case NodeKind::IdentifierExpr:
+        out << "IdentifierExpr ";
+        write_escaped(out, static_cast<const IdentifierExpr&>(node).name);
+        break;
+    case NodeKind::UnaryExpr:
+        out << "UnaryExpr ";
+        write_escaped(out, static_cast<const UnaryExpr&>(node).operation.lexeme);
+        break;
+    case NodeKind::BinaryExpr:
+        out << "BinaryExpr ";
+        write_escaped(out, static_cast<const BinaryExpr&>(node).operation.lexeme);
+        break;
+    case NodeKind::PostfixExpr:
+        out << "PostfixExpr ";
+        write_escaped(out, static_cast<const PostfixExpr&>(node).operation.lexeme);
+        break;
+    case NodeKind::GroupExpr: out << "GroupExpr"; break;
+    case NodeKind::CallExpr:  out << "CallExpr"; break;
+    case NodeKind::IndexExpr: out << "IndexExpr"; break;
     }
     out << " @" << node.location.filename << ':' << node.location.line
         << ':' << node.location.column
@@ -118,7 +173,37 @@ void dump_node(std::ostream& out, const AstNode& node, std::size_t depth) {
         break;
     case NodeKind::Identifier:
     case NodeKind::LiteralExpr:
+    case NodeKind::IdentifierExpr:
         break;
+    case NodeKind::UnaryExpr:
+        dump_node(out, *static_cast<const UnaryExpr&>(node).operand, depth + 1);
+        break;
+    case NodeKind::BinaryExpr: {
+        const auto& binary = static_cast<const BinaryExpr&>(node);
+        dump_node(out, *binary.left, depth + 1);
+        dump_node(out, *binary.right, depth + 1);
+        break;
+    }
+    case NodeKind::PostfixExpr:
+        dump_node(out, *static_cast<const PostfixExpr&>(node).operand, depth + 1);
+        break;
+    case NodeKind::GroupExpr:
+        dump_node(out, *static_cast<const GroupExpr&>(node).expression, depth + 1);
+        break;
+    case NodeKind::CallExpr: {
+        const auto& call = static_cast<const CallExpr&>(node);
+        dump_node(out, *call.callee, depth + 1);
+        for (const auto& argument : call.arguments) {
+            dump_node(out, *argument, depth + 1);
+        }
+        break;
+    }
+    case NodeKind::IndexExpr: {
+        const auto& index = static_cast<const IndexExpr&>(node);
+        dump_node(out, *index.base, depth + 1);
+        dump_node(out, *index.index, depth + 1);
+        break;
+    }
     }
 }
 

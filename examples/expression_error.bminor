@@ -1,0 +1,3 @@
+ready: boolean = true;
+broken: integer = sum(1, );
+unreached: integer = 3;

@@ -8,8 +8,10 @@ selected base dialect, using Douglas Thain's
 sections B.3 through B.6. The supplied project PDF's C grammar is illustrative;
 it is not the grammar used by this parser.
 
-The EBNF file describes the target for steps 5 through 7. It does not claim all
-those rules are implemented today. Step 5 implements this exact subset:
+The EBNF file describes the target for steps 5 through 7. Step 6 implements
+declarations and the complete expression family. Statements/function bodies
+remain for step 7. The current declaration subset below uses the expression
+rules from `grammar.ebnf`:
 
 ```text
 program = { declaration }, EOF ;
@@ -20,16 +22,17 @@ parameter_list = parameter, { ",", parameter } ;
 parameter = IDENTIFIER, ":", parameter_type ;
 atomic_type = "integer" | "boolean" | "char" | "string" ;
 return_type = atomic_type | "void" ;
-value_type = atomic_type | "array", "[", INTEGER_LITERAL, "]", value_type ;
+value_type = atomic_type | "array", "[", expression, "]", value_type ;
 parameter_type = atomic_type
-               | "array", "[", [ INTEGER_LITERAL ], "]", parameter_type ;
-initializer = literal | "{", [ initializer, { ",", initializer } ], "}" ;
+               | "array", "[", [ expression ], "]", parameter_type ;
+initializer = expression | "{", [ initializer, { ",", initializer } ], "}" ;
 literal = INTEGER_LITERAL | BOOLEAN_LITERAL | CHARACTER_LITERAL | STRING_LITERAL ;
 ```
 
-Expression parsing, including negative numbers and expression-valued array
-bounds, arrives in step 6. Function bodies/statements arrive in step 7. These
-are rejected explicitly rather than skipped or represented as parsed bodies.
+Initializers and array bounds now accept names, arithmetic/logical operations,
+assignments, grouping, calls, indexing and postfix increment/decrement. Function
+bodies/statements still receive an explicit unsupported-feature diagnostic;
+they are never skipped or represented as parsed bodies.
 
 An empty file or declaration fragment is a valid parse input. Checking for a
 `main` definition, compatible initializers, duplicate names, array dimensions
@@ -55,14 +58,16 @@ The current subset can be selected with one significant token of lookahead:
 | Atomic or array type | atomic keywords / `array` | Distinct terminal sets. |
 | Optional parameter list | `IDENTIFIER` / `)` | The empty alternative is selected only at `)`. |
 | Optional initializer | `=` / `;` | No overlap between FIRST and the empty alternative's FOLLOW. |
-| Literal or braced initializer | literal tokens / `{` | Distinct terminal sets. |
-| Optional parameter bound | integer literal / `]` | A variable bound is required; only parameters have an empty alternative. |
+| Expression or braced initializer | expression FIRST set / `{` | Expressions do not start with `{`. |
+| Optional parameter bound | expression FIRST set / `]` | A variable bound is required; only parameters have an empty alternative. |
 | List continuation | `,` / closing `)` or `}` | A comma always requires another item; trailing commas are rejected. |
 
 There is no left recursion in the subset or target expression grammar. The
 usual left-recursive form `additive = additive, "+", multiplicative | ...`
-is replaced with a repetition. Step 6 will fold repetitions into left-associated
-ASTs. The right-recursive assignment/power rules instead preserve right grouping.
+is replaced with a repetition. `parse_left_associative()` folds repetitions into
+left-associated ASTs. The right-recursive assignment/power rules instead preserve
+right grouping. Expression routines stop naturally at context delimiters such
+as `;`, `,`, `)` and `]`; they do not consume those tokens as operators.
 
 The *full* grammar has two additional issues; it is not claimed to be globally
 LL(1). A local declaration and an expression statement can both begin with an
@@ -72,9 +77,10 @@ FIRST/FOLLOW conflict with a containing `if`; a recursive-descent `if` routine
 will consume an available `else` before returning. This explicit nearest-`if`
 policy resolves the ambiguity without backtracking.
 
-## Target expression choices for step 6
+## Expression rules implemented in step 6
 
-The overview is informal, so these choices are recorded before implementation.
+The overview is informal; these choices were recorded in step 5 and are now
+implemented and checked through expected expression-tree shapes.
 The grammar splits relational/equality and logical AND/OR into the usual C
 order, rather than treating the grouped rows in the overview as single levels.
 Exponentiation is right-associated. Unary negation/not bind more tightly than
@@ -93,11 +99,24 @@ exponentiation, matching their order in the overview's table.
 | 9 | `\|\|` | left |
 | 10 | `=` | right |
 
-Examples of the planned grouping: `a-b-c` becomes `(a-b)-c`, `a=b=c` becomes
+Examples of the implemented grouping: `a-b-c` becomes `(a-b)-c`, `a=b=c` becomes
 `a=(b=c)`, `2^3^2` becomes `2^(3^2)`, and `-2^2` becomes `(-2)^2`. Unary plus,
 compound assignment, floating point, while statements and nested function
 definitions are outside this selected target grammar. These choices can be
 revised if an actual course-specific definition becomes available.
+
+Each precedence routine delegates to the next tighter level. The shared
+`parse_left_associative()` loop receives a pointer to that operand routine and
+the current level's operator set. Assignment and power use right recursion
+instead. `parse_unary()` handles prefix `-`/`!`; `parse_postfix()` iteratively
+wraps its primary with call, index or postfix nodes. `parse_primary()` handles
+literal/name leaves and explicitly grouped expressions.
+
+Parsing does not resolve names, check assignment targets, enforce operand types,
+evaluate constants, or decide whether a global initializer is constant. Thus an
+expression such as `1=2` has a syntax tree but requires a later semantic error.
+The sample `examples/expressions.bminor` is a syntax demonstration fragment,
+not a promise that its assignments/calls pass those later checks.
 
 ## AST and ownership
 
@@ -106,6 +125,17 @@ optional initializer. `FuncDecl` currently represents a prototype, owning its
 name, return type and parameters. Each `ParamDecl` owns its name and type.
 Array `TypeSyntax` owns its bound expression and element type; `ArrayInitExpr`
 owns nested initializer expressions. Literal leaves retain exact token text.
+
+Expression names use `IdentifierExpr` leaves. `UnaryExpr` and `PostfixExpr` own
+one operand; `BinaryExpr` owns left/right operands and the exact operator token,
+including for assignment. `GroupExpr` owns the grouped expression. `CallExpr`
+owns its callee and argument vector; `IndexExpr` owns its base and index.
+
+Groups are explicit so the opening `(` can be an expression's first token
+without overwriting the location of a name inside it. Unary nodes start at
+their operator; binary/call/index/postfix nodes start at their left/base/callee
+expression. Operators and opening delimiters retain their separate token
+locations. This supports later context-aware highlighting and diagnostics.
 
 Every node inherits a location and a nullable `semantic_type` from `AstNode`.
 Declaration/parameter locations point to their name. Type nodes point to the
@@ -126,8 +156,8 @@ from `text_output.cpp` rather than teaching parsing routines to print.
 | Code | Meaning |
 | --- | --- |
 | `PAR001` | Unexpected token or missing required syntax. |
-| `PAR002` | An input uses a feature scheduled for step 6 or 7. |
-| `PAR003` | Recursive type/initializer nesting exceeds the implementation limit of 128. |
+| `PAR002` | A function body requires step 7. |
+| `PAR003` | Active recursive nesting or expression-tree height exceeds the implementation limit of 128. |
 
 An EOF error has a zero-byte span at the cursor after the final byte; other
 errors cover the current token. A private `ParseFailure` signal unwinds the
@@ -140,3 +170,12 @@ the parser, preventing duplicate syntax messages for invalid tokens. Otherwise
 it prints the complete or partial tree and any parser diagnostic; an error
 returns exit code 1. The nesting guard is restored during unwinding, and a
 second `parse()` call resets all cursor/error state.
+
+Recursive edges (grouping, unary operators, right-associated operators, nested
+calls/indexes, types and initializer lists) use the nesting guard. Iterative
+left-associated/suffix chains are also checked through `Expr::depth`, which
+records expression-tree height. Without that second check, a shallow parsing
+loop could create a tree too deep to print or destroy safely. Leaves have
+depth 1; parents add one to the deepest expression child. Array lists and call
+arguments update this value as children are appended. This is a depth limit,
+not a width limit: a shallow call with 300 arguments is accepted and tested.

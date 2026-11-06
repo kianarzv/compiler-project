@@ -150,8 +150,7 @@ void partial_tree_and_eof_errors() {
 
 void unsupported_later_steps() {
     for (const std::string source : {
-            "x: integer = 1+2;", "x: integer = other;", "x: integer = -2;",
-            "x: array [1+2] integer;", "f: function integer () = { return 0; }"}) {
+            "f: function integer () = { return 0; }"}) {
         const auto result = parse(source);
         require(result.has_errors() && result.diagnostics.size() == 1
                     && result.diagnostics[0].code == DiagnosticCode::UnsupportedSyntax
@@ -246,7 +245,7 @@ int main() {
         {"function prototypes", function_prototypes},
         {"trivia and source locations", trivia_and_locations},
         {"partial AST and EOF errors", partial_tree_and_eof_errors},
-        {"unsupported later steps", unsupported_later_steps},
+        {"unsupported function bodies", unsupported_later_steps},
         {"malformed declarations", malformed_declarations},
         {"syntax without semantic checks", syntax_without_semantic_checks},
         {"bounded nesting", nesting_limit},

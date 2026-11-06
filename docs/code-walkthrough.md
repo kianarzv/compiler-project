@@ -94,15 +94,34 @@ function prototype and a variable. Variable types are read by
 use `parse_atomic_type(true)` to admit `void`; parameter types additionally
 permit unsized arrays. Each parameter has its own name and type child nodes.
 
-`parse_initializer()` currently handles literals and nested braced lists. It
-creates `LiteralExpr` leaves or an `ArrayInitExpr` owning the elements. Normal
-expression routines will replace the literal-only branch in step 6.
+`parse_initializer()` handles nested braced lists or delegates to
+`parse_expression()`. Array bounds use the same expression entry point. From
+there, `parse_assignment()` calls progressively tighter precedence routines.
+Each left-associative level supplies its operator set and the next operand
+routine to `parse_left_associative()`, whose loop builds an accumulated left
+child. Power and assignment instead recurse on the right.
+
+The `OperandParser` alias is a pointer to a `Parser` member function.
+`&Parser::parse_multiplicative` selects one such function;
+`(this->*operand_parser)()` invokes it on this parser. This shares the folding
+loop while keeping named functions corresponding to the grammar levels.
+
+`parse_unary()` handles prefix minus/not. `parse_postfix()` starts from a
+primary and wraps it for every following call, index or increment/decrement.
+Call arguments and index expressions recurse through `parse_expression()`;
+the surrounding routine owns the comma or closing delimiter. `parse_primary()`
+creates name/literal leaves or a `GroupExpr` retaining an opening parenthesis.
+
+Each new expression constructor calculates its structural depth from its
+children. The parser checks this after construction, including left-associated
+and postfix chains built by loops. A separate nesting guard limits actual
+recursive parsing. Both protect the later AST printer and automatic cleanup.
 
 An error creates a structured parser diagnostic and throws a private
 `ParseFailure` signal. `parse()` catches it, automatically destroys the
 incomplete declaration, and returns any complete earlier declarations. A
 `PAR002` message explicitly marks syntax scheduled for a later step rather
-than accepting an unparsed expression/body. Panic-mode recovery comes in step 8.
+than accepting an unparsed body. Panic-mode recovery comes in step 8.
 
 `ParseResult` owns the `Program` and diagnostics. Nodes own their children with
 `unique_ptr`; no AST data depends on the input vector's lifetime. All node
